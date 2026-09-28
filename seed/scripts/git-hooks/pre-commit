@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Pre-commit hook: refuse a commit that would leave journal/ failing
+# scripts/check_status.sh. Install with scripts/install_git_hooks.sh.
+#
+# It checks the STAGED snapshot (what the commit will contain), not the working
+# tree, so an unstaged fix cannot hide a bad commit. It runs only when the commit
+# touches journal/ or the check's own files. Bypass with `git commit --no-verify`.
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+touched="$(git diff --cached --name-only --diff-filter=ACMRD -- \
+    journal scripts/rfc_lib.py scripts/check_status.py scripts/build_status.py)"
+[ -n "$touched" ] || exit 0
+
+snapshot="$(mktemp -d)"
+trap 'rm -rf "$snapshot"' EXIT
+git ls-files -z -- journal | xargs -0 -r git checkout-index --prefix="$snapshot/" --
+
+if ! "$repo_root/scripts/check_status.sh" --root "$snapshot"; then
+    cat >&2 <<'MSG'
+
+Commit blocked: the staged journal/ fails scripts/check_status.sh (see above).
+Fix it, then `git add` the fix. If STATUS.md is stale, run
+`venv/bin/python scripts/build_status.py` and stage journal/STATUS.md.
+To commit anyway: git commit --no-verify
+MSG
+    exit 1
+fi

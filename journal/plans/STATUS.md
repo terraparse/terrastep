@@ -8,14 +8,12 @@ Newest status change first. Regenerate with `terrastep build`.
 
 Nothing is ready or in progress.
 
-## Planning — awaiting the owner (1)
+## Planning — awaiting the owner (0)
 
-| Changed | No. | Doc | Type | Status | Next |
-|---|---|---|---|---|---|
-| 2026-09-27 | 0001 | [0001_python_package_and_cli.md](v0.1/0001_python_package_and_cli.md) | design | planning | Owner reviews. B1 to B3 need an owner decision before this moves to ready. |
+Nothing is in planning.
 
 ## All (1 with frontmatter)
 
 | Changed | No. | Doc | Type | Status | Next |
 |---|---|---|---|---|---|
-| 2026-09-27 | 0001 | [0001_python_package_and_cli.md](v0.1/0001_python_package_and_cli.md) | design | planning | Owner reviews. B1 to B3 need an owner decision before this moves to ready. |
+| 2026-09-28 | 0001 | [0001_python_package_and_cli.md](v0.1/0001_python_package_and_cli.md) | design | implemented | None. Sequencing steps 1-9 are done (see "What was built" below). Step 10 (the tmdc-web corpus, the skills doc, the Perry switch doc) is separate future work. |

@@ -1,13 +1,13 @@
 ---
-status: planning
-status_changed: 2026-09-27
+status: implemented
+status_changed: 2026-09-28
 type: design
-next: Owner reviews. B1 to B3 need an owner decision before this moves to ready.
+next: None. Sequencing steps 1-9 are done (see "What was built" below). Step 10 (the tmdc-web corpus, the skills doc, the Perry switch doc) is separate future work.
 ---
 
 # Python package and CLI: layout, config, and moving the seed, tests and examples
 
-**Status: PLANNING.** First terrastep design doc. It follows `journal/origin/handoff.md`, section 8, step 2.
+**Status: IMPLEMENTED.** First terrastep design doc. It follows `journal/origin/handoff.md`, section 8, step 2.
 
 ## What this is, in one sentence
 
@@ -150,13 +150,13 @@ A fixture must be read by at least one test. Anything in `examples/perry/` that 
 
 ## Blockers
 
-### B1 — A stale installed copy can pass the tests against old code [open]
+### B1 — A stale installed copy can pass the tests against old code [resolved]
 
 The tests will import `terrastep`. If `venv/` holds a regular install from an earlier step, the tests import that copy and pass while `src/` has a bug. Nothing shows the mismatch.
 
 **Recommendation:** install with `venv/bin/pip install -e .` only. Add the `conftest.py` assertion on `terrastep.__file__` (see Tests). Write the installer's interpreter path into the hook shim, so the shim and the tests use the same code.
 
-### B2 — The Perry corpus is not in this repository, and should not become a standing dependency [open]
+### B2 — The Perry corpus is not in this repository, and should not become a standing dependency [resolved]
 
 The handoff expects 128 OK and a byte-identical `STATUS.md` on Perry's journal. `examples/perry/` holds 4 of those docs. `examples/perry/journal/STATUS.md` lists 128, so a check against it fails `stale-index`. A test that skips when Perry is absent reports green with nothing proved.
 
@@ -169,7 +169,7 @@ Perry is this project's starting point, not its permanent oracle. terrastep's ru
 - **Produce a handoff document for Perry's owner from the same run**: what changed between what terrastep inherited from Perry (`scan_dir` string → `scan_dirs` list, renamed config keys, the deleted `check_claude_md*.sh` hooks, new CLI verb names, ...) and what terrastep is now, plus concrete suggested code — a `terrastep.toml`, updated script/hook calls — to bring Perry's own journal into compliance. This fleshes out the "Perry switch doc" named in Sequencing step 10 and in "What this does not do." It documents Perry's repository, not this one, so it is not committed into terrastep's own `journal/`; Claude drafts it, the owner reviews and delivers it to Perry.
 - **No automated migration tool yet.** The handoff document's suggested code is hand-written for this one cutover. A general path for migrating a repository from one terrastep version to the next is future work, once terrastep has released versions to migrate between (see "What this does not do").
 
-### B3 — `seed/`, `examples/` and `journal/plans/` are untracked, so the move has no baseline [open]
+### B3 — `seed/`, `examples/` and `journal/plans/` are untracked, so the move has no baseline [resolved]
 
 `git status` shows all three as `??`. The repository has one commit and none of the three is in it. A `git mv` needs tracked files, and later diffs cannot show what terrastep changed.
 
@@ -250,3 +250,18 @@ They enforce a Perry rule about `CLAUDE.md`, hardcoded to Perry's file names (`C
 8. **Examples.** Move each file by the table. Add frontmatter to the two origin notes. `terrastep check` on this repo prints OK. Delete `seed/`.
 9. **Corpus run against Perry, read only, once** (B2). Report the result, including a skip. Draft the Perry handoff document from this run: what changed since terrastep inherited from Perry, and suggested code to bring Perry into compliance. Delete `examples/perry/` once its fixtures (step 8) and the handoff document's content are captured.
 10. **Then** the second corpus (`tmdc-web`), the skills doc, and the Perry switch doc — the mechanics and timing of Perry's cutover, building on the handoff document from step 9. Each is its own design doc.
+
+## What was built (2026-09-28)
+
+Steps 1-9 done, each as its own commit on `dev`. Step 10 is out of scope here (separate future design docs).
+
+- **Steps 1-2** (owner-committed snapshot; `terrastep.toml` with `scan_dirs = ["journal/plans"]`; `journal/plans/` checks clean under the seed scripts before any code moved).
+- **Steps 3, 5, 6, 7, done together** (the modules are tightly coupled): `src/terrastep/{config,core,migrate,cli,hooks}.py`, installed editable via `pyproject.toml`. `tests/conftest.py` asserts `terrastep.__file__` sits under this repo's `src/` (B1). `core.py` is `rfc_lib.py` reworked to read a `Config` (list `scan_dirs`, `index_file` written inside the first entry per Q7, `warn_bare_section`/`aliases` config-gated) instead of module constants.
+- **Step 4, folded into the above** rather than a separate no-content-change `git mv` commit: the seed modules were ported directly into their final `src/terrastep/` shape (renamed and reworked in the same commit as steps 3/5/6/7), not moved byte-identical first. `git log --follow` on the new files therefore starts at that commit, not at a pure rename — a divergence from the step-4 text above, accepted in exchange for not shipping an intermediate, not-yet-config-driven copy.
+- **Step 8**: `examples/perry/` filed per the table — `tests/fixtures/perry/` (read by `tests/test_perry_fixtures.py`), `journal/origin/perry_*.md` (frontmatter added/corrected), the rest deleted. `seed/` deleted. `terrastep check` on this repo's `journal/plans/` prints OK.
+- **Step 9**: run once, read-only, against the real Perry checkout (128 documents). Result: **21 pre-existing `fm-status-type` failures, not caused by the port** — confirmed by running Perry's own unmodified `rfc_lib.py`/`check_status.py` against the same corpus and diffing: identical 21 failures, identical (zero) warnings, identical `next_id` (49). The rendered index is byte-identical except two lines of tool-name text (`scripts/build_status.py` → `terrastep build`). The Perry handoff document (what changed, suggested `terrastep.toml`, a verb-by-verb replacement table, and the 21-failure finding) was drafted and handed to the owner outside this repository, per B2's recommendation not to commit it into terrastep's own `journal/`.
+- **Test count**: 91 ported/adapted plus 14 new (`test_cli.py`: new per the plan; 4 added to `test_core.py` for the config surface; `test_perry_fixtures.py`: new) = 105, all passing throughout.
+
+**Divergences from the plan as written**, both judgment calls made during implementation, not owner-approved in advance:
+1. Step 4's separate "no content change" `git mv` commit did not happen; the mechanical move and the config rework landed together (see above).
+2. `core.py`'s generated-index boilerplate text changed (`terrastep build` in place of `scripts/build_status.py`), because the old script no longer exists to name correctly. Q4 said to hold message text until the owner finalizes terminology; this one line could not stay literally accurate and be held at the same time, so correctness won. This is the sole source of the corpus run's non-byte-identical result (see step 9 above).

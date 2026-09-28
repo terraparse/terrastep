@@ -1,9 +1,9 @@
-"""Tests for the two enforcement hooks around scripts/check_status.sh.
+"""Tests for the two enforcement hooks: the git pre-commit hook and the Claude
+Code Stop hook shim in integrations/claude/stop_hook.sh.
 
-Each test builds a throwaway git repo that holds copies of the scripts and a few
-journal docs, then drives the real hook scripts: the git pre-commit hook
-(scripts/git-hooks/pre-commit) and the Claude Code Stop hook
-(scripts/check_status_stop_hook.sh). Design: journal/misc/status_and_terraparse_rfcs.md.
+Each test builds a throwaway git repo and drives `terrastep` (the same
+interpreter running the tests, via `python -m terrastep`, so no fake venv
+wrapper is needed: the installed package carries the interpreter it needs).
 """
 
 from __future__ import annotations
@@ -17,12 +17,11 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
-SCRIPTS = ["rfc_lib.py", "check_status.py", "check_status.sh", "build_status.py",
-           "check_status_stop_hook.sh", "git-hooks/pre-commit"]
+STOP_HOOK = REPO / "integrations" / "claude" / "stop_hook.sh"
 
 pytestmark = pytest.mark.skipif(
-    not (shutil.which("git") and shutil.which("jq") and shutil.which("python3")),
-    reason="needs git, jq and python3")
+    not (shutil.which("git") and shutil.which("jq")),
+    reason="needs git and jq")
 
 GOOD = "---\nstatus: in-progress\nstatus_changed: 2026-09-24\ntype: note\n---\n\n# A note\n"
 BAD = GOOD.replace("status: in-progress", "status: wip")
@@ -32,27 +31,30 @@ def git(repo: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True)
 
 
+def terrastep(repo: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, "-m", "terrastep", *args], cwd=repo, capture_output=True, text=True)
+
+
 def build(repo: Path) -> None:
-    subprocess.run([sys.executable, "scripts/build_status.py"], cwd=repo, check=True, capture_output=True)
+    r = terrastep(repo, "build")
+    assert r.returncode == 0, r.stderr
 
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
-    for rel in SCRIPTS:
-        dest = tmp_path / "scripts" / rel
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(REPO / "scripts" / rel, dest)
     (tmp_path / "journal").mkdir()
     (tmp_path / "journal" / "a.md").write_text(GOOD)
+    # The Stop hook shim looks for venv/bin/terrastep; give it a wrapper around
+    # the interpreter running these tests, which already has terrastep installed.
+    (tmp_path / "venv" / "bin").mkdir(parents=True)
+    wrapper = tmp_path / "venv" / "bin" / "terrastep"
+    wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" -m terrastep "$@"\n')
+    wrapper.chmod(0o755)
     git(tmp_path, "init", "-q")
     git(tmp_path, "config", "user.email", "t@example.com")
     git(tmp_path, "config", "user.name", "t")
-    git(tmp_path, "config", "core.hooksPath", "scripts/git-hooks")
-    # Use the interpreter that runs the tests: it has PyYAML, the system python3 may not.
-    (tmp_path / "venv" / "bin").mkdir(parents=True)
-    wrapper = tmp_path / "venv" / "bin" / "python"  # a symlink would lose the venv's pyvenv.cfg
-    wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
-    wrapper.chmod(0o755)
+    r = terrastep(tmp_path, "install-hooks")
+    assert r.returncode == 0, r.stderr
     build(tmp_path)
     git(tmp_path, "add", "-A", ".")
     git(tmp_path, "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "base")
@@ -64,8 +66,8 @@ def commit(repo: Path, msg: str = "change") -> subprocess.CompletedProcess:
 
 
 def stop(repo: Path, payload: dict | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run([str(repo / "scripts" / "check_status_stop_hook.sh")], cwd=repo, capture_output=True,
-                          text=True, input=json.dumps(payload or {}))
+    return subprocess.run([str(STOP_HOOK)], cwd=repo, capture_output=True, text=True,
+                          input=json.dumps(payload or {}))
 
 
 # ------------------------------------------------------------ pre-commit hook
@@ -88,7 +90,7 @@ def test_precommit_blocks_a_bad_frontmatter_and_says_why(repo):
 
 def test_precommit_blocks_a_stale_index(repo):
     (repo / "journal" / "a.md").write_text(GOOD.replace("2026-09-24", "2026-09-25"))
-    git(repo, "add", "journal/a.md")  # STATUS.md is not regenerated or staged
+    git(repo, "add", "journal/a.md")  # the index is not regenerated or staged
     r = commit(repo)
     assert r.returncode != 0 and "stale-index" in r.stderr
 
@@ -119,6 +121,11 @@ def test_no_verify_bypasses_the_hook(repo):
     assert git(repo, "commit", "-q", "--no-verify", "-m", "x").returncode == 0
 
 
+def test_install_hooks_refuses_to_overwrite_without_force(repo):
+    assert terrastep(repo, "install-hooks").returncode == 1
+    assert terrastep(repo, "install-hooks", "--force").returncode == 0
+
+
 # ------------------------------------------------------------------ Stop hook
 
 def test_stop_hook_is_silent_when_journal_is_unchanged(repo):
@@ -138,7 +145,7 @@ def test_stop_hook_blocks_with_the_failure_when_journal_changed_and_fails(repo):
     r = stop(repo)
     out = json.loads(r.stdout)
     assert out["decision"] == "block"
-    assert "fm-status" in out["reason"] and "build_status.py" in out["reason"]
+    assert "fm-status" in out["reason"] and "terrastep build" in out["reason"]
 
 
 def test_stop_hook_does_not_loop_when_stop_hook_active(repo):
@@ -154,5 +161,5 @@ def test_stop_hook_does_not_block_on_a_failure_it_did_not_cause(repo):
     git(repo, "add", "-A", ".")
     assert git(repo, "commit", "-q", "--no-verify", "-m", "bad, on purpose").returncode == 0
     (repo / "notes.txt").write_text("unrelated change")
-    assert subprocess.run([sys.executable, "scripts/check_status.py"], cwd=repo, capture_output=True).returncode == 1
+    assert terrastep(repo, "check").returncode == 1
     assert stop(repo).stdout == ""

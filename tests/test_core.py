@@ -1,6 +1,6 @@
-"""Negative controls for scripts/check_status.py and scripts/build_status.py.
+"""Negative controls for terrastep.core.
 
-The design is in journal/misc/status_and_terraparse_rfcs.md. Each rule is
+The design is in journal/origin/status_and_terraparse_rfcs.md. Each rule is
 tested the same way: start from a fixture that passes, change one thing, and
 require the check to fail with exactly that rule's code. A rule whose mutation
 does not fail has proved nothing, so the baselines are also required to pass.
@@ -9,18 +9,16 @@ does not fail has proved nothing, so the baselines are also required to pass.
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-import build_status  # noqa: E402
-import check_status  # noqa: E402
-import rfc_lib  # noqa: E402
+from terrastep import core
+from terrastep.config import Config
 
-FIXTURES = Path(__file__).parent / "rfc_fixtures"
+FIXTURES = Path(__file__).parent / "fixtures"
 BASELINES = ["0051_design_ok.md"]
+CONFIG = Config()  # scan_dirs = ("journal",), the default
 
 
 def text_of(name: str) -> str:
@@ -36,8 +34,8 @@ def make_repo(tmp_path: Path, files: dict[str, str]) -> Path:
 
 
 def codes_for(tmp_path: Path, files: dict[str, str], target: str) -> set[str]:
-    docs = rfc_lib.scan_docs(make_repo(tmp_path, files))
-    failures, _ = rfc_lib.check_docs(docs, {f"journal/misc/{target}"})
+    docs = core.scan_docs(make_repo(tmp_path, files), CONFIG)
+    failures, _ = core.check_docs(docs, CONFIG, {f"journal/misc/{target}"})
     return {f.code for fs in failures.values() for f in fs}
 
 
@@ -83,8 +81,8 @@ def replace_once(text: str, old: str, new: str) -> str:
 
 @pytest.mark.parametrize("name", BASELINES)
 def test_baseline_passes_with_no_failures_and_no_warnings(tmp_path, name):
-    docs = rfc_lib.scan_docs(make_repo(tmp_path, {name: text_of(name)}))
-    failures, warnings = rfc_lib.check_docs(docs)
+    docs = core.scan_docs(make_repo(tmp_path, {name: text_of(name)}), CONFIG)
+    failures, warnings = core.check_docs(docs, CONFIG)
     assert failures == {}
     assert warnings == {}
 
@@ -166,8 +164,8 @@ def test_duplicate_number_fails_on_both_files(tmp_path):
 
 def test_scope_and_design_are_expected_but_never_required(tmp_path):
     t = drop_section(drop_section(text_of(DESIGN), "What this does not do"), "The design")
-    docs = rfc_lib.scan_docs(make_repo(tmp_path, {DESIGN: t}))
-    failures, warnings = rfc_lib.check_docs(docs)
+    docs = core.scan_docs(make_repo(tmp_path, {DESIGN: t}), CONFIG)
+    failures, warnings = core.check_docs(docs, CONFIG)
     assert failures == {}
     messages = " ".join(warnings["journal/misc/" + DESIGN])
     assert "'design'" in messages and "'scope'" in messages
@@ -176,8 +174,8 @@ def test_scope_and_design_are_expected_but_never_required(tmp_path):
 def test_recommendations_out_of_item_order_only_warns(tmp_path):
     t = replace_once(text_of(DESIGN), "2. Do the second thing first (B2).\n3. Answer yes (Q1).",
                      "2. Answer yes (Q1).\n3. Do the second thing first (B2).")
-    docs = rfc_lib.scan_docs(make_repo(tmp_path, {DESIGN: t}))
-    failures, warnings = rfc_lib.check_docs(docs)
+    docs = core.scan_docs(make_repo(tmp_path, {DESIGN: t}), CONFIG)
+    failures, warnings = core.check_docs(docs, CONFIG)
     assert failures == {}
     assert "out of item order" in warnings["journal/misc/" + DESIGN][0]
 
@@ -248,7 +246,7 @@ def test_blocked_by_resolves_against_any_scanned_file(tmp_path):
 
 
 def test_heading_inside_a_code_fence_is_not_a_section(tmp_path):
-    docs = rfc_lib.scan_docs(make_repo(tmp_path, {DESIGN: text_of(DESIGN)}))
+    docs = core.scan_docs(make_repo(tmp_path, {DESIGN: text_of(DESIGN)}), CONFIG)
     assert [s.title for s in docs[0].sections].count("Blockers") == 1
 
 
@@ -256,37 +254,54 @@ def test_heading_inside_a_code_fence_is_not_a_section(tmp_path):
 
 def test_unclassified_front_section_warns_but_passes(tmp_path):
     t = replace_once(text_of(DESIGN), "## What this does not do", "## Something unusual\n\ntext\n\n## What this does not do")
-    docs = rfc_lib.scan_docs(make_repo(tmp_path, {DESIGN: t}))
-    failures, warnings = rfc_lib.check_docs(docs)
+    docs = core.scan_docs(make_repo(tmp_path, {DESIGN: t}), CONFIG)
+    failures, warnings = core.check_docs(docs, CONFIG)
     assert failures == {}
     assert "unclassified front sections" in warnings["journal/misc/" + DESIGN][0]
 
 
-def test_more_than_three_in_progress_warns(tmp_path):
+def test_more_than_the_cap_in_progress_warns(tmp_path):
     def wip(n):
         return f"---\nstatus: in-progress\nstatus_changed: 2026-09-2{n}\ntype: note\n---\n\n# n{n}\n"
-    docs = rfc_lib.scan_docs(make_repo(tmp_path, {f"n{i}.md": wip(i) for i in range(4)}))
-    failures, warnings = rfc_lib.check_docs(docs)
+    docs = core.scan_docs(make_repo(tmp_path, {f"n{i}.md": wip(i) for i in range(4)}), CONFIG)
+    failures, warnings = core.check_docs(docs, CONFIG)
     assert failures == {}
-    assert "cap is 3" in warnings["(all)"][0]
+    assert f"cap is {CONFIG.in_progress_cap}" in warnings["(all)"][0]
+
+
+def test_bare_section_only_warns_when_configured_on(tmp_path):
+    t = replace_once(text_of(DESIGN), "**Recommendation:** answer yes.", "See §3 for more.")
+    docs = core.scan_docs(make_repo(tmp_path, {DESIGN: t}), CONFIG)
+    _, warnings = core.check_docs(docs, CONFIG)
+    assert "journal/misc/" + DESIGN not in warnings
+
+    on = Config(warn_bare_section=True)
+    docs = core.scan_docs(make_repo(tmp_path, {DESIGN: t}), on)
+    _, warnings = core.check_docs(docs, on)
+    assert "bare section" in warnings["journal/misc/" + DESIGN][0]
 
 
 # ----------------------------------------------- the generated index + CLI
 
-def test_next_id_starts_at_49_and_follows_the_highest(tmp_path):
-    docs = rfc_lib.scan_docs(make_repo(tmp_path, {"plain.md": "# x\n"}))
-    assert rfc_lib.next_id(docs) == 49
-    docs = rfc_lib.scan_docs(make_repo(tmp_path, {DESIGN: text_of(DESIGN)}))
-    assert rfc_lib.next_id(docs) == 52
-    docs = rfc_lib.scan_docs(make_repo(tmp_path, {"0007_low.md": "# x\n"}))
-    assert rfc_lib.next_id(docs) == 52  # a low number never lowers the counter
+def test_next_id_starts_after_the_floor_and_follows_the_highest(tmp_path):
+    docs = core.scan_docs(make_repo(tmp_path, {"plain.md": "# x\n"}), CONFIG)
+    assert core.next_id(docs, CONFIG) == 1
+    docs = core.scan_docs(make_repo(tmp_path, {DESIGN: text_of(DESIGN)}), CONFIG)
+    assert core.next_id(docs, CONFIG) == 52
+    docs = core.scan_docs(make_repo(tmp_path, {"0007_low.md": "# x\n"}), CONFIG)
+    assert core.next_id(docs, CONFIG) == 52  # a low number never lowers the counter
+
+
+def test_id_floor_is_config_driven(tmp_path):
+    docs = core.scan_docs(make_repo(tmp_path, {"plain.md": "# x\n"}), Config(id_floor=48))
+    assert core.next_id(docs, Config(id_floor=48)) == 49
 
 
 def test_index_sorts_newest_first_and_lists_docs_without_frontmatter(tmp_path):
     def doc(day):
         return f"---\nstatus: in-progress\nstatus_changed: 2026-09-{day}\ntype: note\n---\n\n# x\n"
     make_repo(tmp_path, {"old.md": doc("01"), "new.md": doc("20"), "bare.md": "# no frontmatter\n"})
-    text = rfc_lib.render_status(rfc_lib.scan_docs(tmp_path))
+    text = core.render_status(core.scan_docs(tmp_path, CONFIG), CONFIG)
     assert text.index("new.md") < text.index("old.md")
     assert "## No frontmatter yet (1)" in text and "bare.md" in text
 
@@ -295,7 +310,7 @@ def test_index_active_block_holds_only_ready_and_in_progress(tmp_path):
     def doc(status):
         return f"---\nstatus: {status}\nstatus_changed: 2026-09-20\ntype: note\n---\n\n# x\n"
     make_repo(tmp_path, {"a_ready.md": doc("ready"), "b_closed.md": doc("closed")})
-    text = rfc_lib.render_status(rfc_lib.scan_docs(tmp_path))
+    text = core.render_status(core.scan_docs(tmp_path, CONFIG), CONFIG)
     active = text.split("## Active")[1].split("## Planning")[0]
     assert "a_ready.md" in active and "b_closed.md" not in active
 
@@ -305,7 +320,7 @@ def _doc(status, day="20"):
 
 
 def _blocks(text):
-    """Split STATUS.md into {heading text: block text}."""
+    """Split the index into {heading text: block text}."""
     parts = text.split("\n## ")[1:]
     return {p.split("\n", 1)[0]: p for p in parts}
 
@@ -313,7 +328,7 @@ def _blocks(text):
 def test_planning_block_lists_only_planning_docs_newest_first_with_a_count(tmp_path):
     make_repo(tmp_path, {"a_old.md": _doc("planning", "01"), "b_new.md": _doc("planning", "22"),
                          "c_ready.md": _doc("ready"), "d_closed.md": _doc("closed"), "e_done.md": _doc("implemented")})
-    blocks = _blocks(rfc_lib.render_status(rfc_lib.scan_docs(tmp_path)))
+    blocks = _blocks(core.render_status(core.scan_docs(tmp_path, CONFIG), CONFIG))
     heading = next(h for h in blocks if h.startswith("Planning"))
     assert heading == "Planning — awaiting the owner (2)"
     planning = blocks[heading]
@@ -324,32 +339,30 @@ def test_planning_block_lists_only_planning_docs_newest_first_with_a_count(tmp_p
 
 def test_planning_block_sits_between_active_and_all_and_says_so_when_empty(tmp_path):
     make_repo(tmp_path, {"a_ready.md": _doc("ready")})
-    text = rfc_lib.render_status(rfc_lib.scan_docs(tmp_path))
+    text = core.render_status(core.scan_docs(tmp_path, CONFIG), CONFIG)
     assert text.index("## Active") < text.index("## Planning") < text.index("## All")
     assert "Planning — awaiting the owner (0)" in text and "Nothing is in planning." in text
 
 
 def test_a_doc_in_planning_is_not_in_the_active_block_but_is_still_in_all(tmp_path):
     make_repo(tmp_path, {"p_plan.md": _doc("planning")})
-    blocks = _blocks(rfc_lib.render_status(rfc_lib.scan_docs(tmp_path)))
+    blocks = _blocks(core.render_status(core.scan_docs(tmp_path, CONFIG), CONFIG))
     assert "p_plan.md" not in blocks["Active (`ready` and `in-progress`)"]
     assert "p_plan.md" in next(v for h, v in blocks.items() if h.startswith("All"))
 
 
-def test_cli_detects_a_stale_index_and_build_fixes_it(tmp_path, capsys):
-    make_repo(tmp_path, {DESIGN: text_of(DESIGN)})
-    root = str(tmp_path)
-    assert check_status.main(["--root", root]) == 1  # STATUS.md does not exist yet
-    assert "stale-index" in capsys.readouterr().err
-    assert build_status.main(["--root", root]) == 0
-    assert check_status.main(["--root", root]) == 0
-    p = tmp_path / "journal" / "misc" / DESIGN
-    p.write_text(replace_once(p.read_text(), "next: Owner reviews.", "next: Something else."), encoding="utf-8")
-    assert check_status.main(["--root", root]) == 1  # the frontmatter changed, the index did not
-    assert "stale-index" in capsys.readouterr().err
+def test_index_link_is_relative_to_the_first_scan_dirs_entry(tmp_path):
+    (tmp_path / "journal" / "plans" / "v0.1").mkdir(parents=True)
+    (tmp_path / "journal" / "plans" / "v0.1" / "0001_x.md").write_text(_doc("planning"), encoding="utf-8")
+    cfg = Config(scan_dirs=("journal/plans",))
+    text = core.render_status(core.scan_docs(tmp_path, cfg), cfg)
+    assert "(v0.1/0001_x.md)" in text
 
 
-def test_cli_exit_code_is_1_on_a_rule_failure(tmp_path):
-    make_repo(tmp_path, {DESIGN: replace_once(text_of(DESIGN), "type: design", "type: plan")})
-    build_status.main(["--root", str(tmp_path)])
-    assert check_status.main(["--root", str(tmp_path)]) == 1
+def test_scan_dirs_only_reads_designated_directories(tmp_path):
+    (tmp_path / "journal" / "plans").mkdir(parents=True)
+    (tmp_path / "journal" / "origin").mkdir(parents=True)
+    (tmp_path / "journal" / "plans" / "0001_x.md").write_text(_doc("planning"), encoding="utf-8")
+    (tmp_path / "journal" / "origin" / "untracked.md").write_text("no frontmatter, not scanned\n", encoding="utf-8")
+    docs = core.scan_docs(tmp_path, Config(scan_dirs=("journal/plans",)))
+    assert [d.rel for d in docs] == ["journal/plans/0001_x.md"]

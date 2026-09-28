@@ -1,3 +1,10 @@
+---
+status: closed
+status_changed: 2026-09-25
+type: note
+closed_reason: reference
+---
+
 # Perry conventions: the method sections (excerpt)
 
 Rules Claude must apply on any future task of the relevant kind — not just the task that produced them. Always loaded (imported from root `CLAUDE.md`), by deliberate choice: these are referenced by name constantly enough that the risk of a missed check outweighs the token cost of loading them every session. See `journal/misc/claudemd_redesign.md` for the reasoning behind this file's existence.

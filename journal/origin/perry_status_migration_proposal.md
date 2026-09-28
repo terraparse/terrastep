@@ -1,7 +1,8 @@
 ---
-status: implemented
+status: closed
 status_changed: 2026-09-23
 type: note
+closed_reason: reference
 ---
 
 # Frontmatter migration proposal

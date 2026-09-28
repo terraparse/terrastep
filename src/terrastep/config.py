@@ -20,6 +20,27 @@ DEFAULT_EXCLUDE: tuple[str, ...] = ("CHANGELOG.md",)
 DEFAULT_ID_FLOOR = 0
 DEFAULT_IN_PROGRESS_CAP = 3
 
+# One line per top-level terrastep.toml key, for `terrastep skill build`'s
+# generated docs (0002). Defaults themselves come from the Config dataclass
+# below, not duplicated here — this only supplies the description text a
+# default value can't carry on its own.
+CONFIG_HELP: dict[str, str] = {
+    "scan_dirs": "The designated directories, and only them. A list, scanned recursively "
+                 "(so version subdirectories are included). A markdown file outside every "
+                 "entry is invisible to terrastep.",
+    "index_file": "The generated index's filename. Always excluded from the scan. Written "
+                  "inside scan_dirs[0].",
+    "exclude": "Extra filenames to skip, on top of index_file.",
+    "id_floor": "The next design document's number is floor + 1.",
+    "in_progress_cap": "Warning only: more than this many in-progress documents at once.",
+    "aliases": "Adds heading patterns to a role; never removes a built-in one.",
+    "warn_bare_section": "Warn on a `§N` reference with no document named alongside it.",
+    "migrate.changelog": "A changelog file: a document it links is proposed as already "
+                         "finished, dated by that line.",
+    "migrate.plan_dir": "A directory whose documents default to type: legacy during "
+                        "`migrate propose`.",
+}
+
 
 @dataclass(frozen=True)
 class MigrateConfig:

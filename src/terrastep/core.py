@@ -25,6 +25,36 @@ PLAN_TYPES = ("design",)
 TYPES = PLAN_TYPES + ("legacy", "note")
 CLOSED_REASONS = ("superseded", "rejected", "withdrawn", "reference")
 
+# Every failure code a document can be given, and what it means. The single
+# source of truth for `terrastep skill build`'s generated docs (0002) — a test
+# (tests/test_core.py) asserts every code string built anywhere in src/terrastep/
+# is a key here, and vice versa, so this cannot drift from the rules below.
+FAILURE_CODES: dict[str, str] = {
+    "fm-missing": "No frontmatter block at the top of the file.",
+    "fm-yaml": "The frontmatter block is not valid YAML.",
+    "fm-type": "type is missing or not one of the recognized types.",
+    "fm-status": "status is missing or not one of the recognized states.",
+    "fm-status-type": "A note's status is not in-progress or closed.",
+    "fm-date": "status_changed is missing or not a YYYY-MM-DD date.",
+    "fm-closed-reason": "status is closed but closed_reason is missing or not recognized.",
+    "fm-link": "blocked_by or superseded_by names a document outside the scanned corpus.",
+    "fm-id": "A plan-type document's filename has no NNNN_ number prefix.",
+    "fm-id-dup": "Two or more documents share the same NNNN number.",
+    "body-order": "The four decision sections (Blockers, Questions, Recommendations, "
+                  "Sequencing) are missing, duplicated, or out of order.",
+    "body-roles": "A required front role (e.g. summary or motivation) has no non-empty section.",
+    "body-empty": "Blockers or Questions has no items and doesn't say 'None' with a reason.",
+    "body-items": "A blocker/question item is duplicated, misplaced, or malformed.",
+    "body-tag": "A blocker's first line doesn't carry exactly one [open] or [resolved] tag.",
+    "body-recommend": "An item has no recommendation: a '**Recommendation' run-in or a "
+                       "'→ **answer**'.",
+    "body-r-cover": "Recommendations doesn't mention every still-open blocker/question by id.",
+    "body-dated": "A section after Sequencing has no YYYY-MM-DD date in its heading.",
+    "gate-open-blocker": "status is ready or in-progress but a blocker is still [open].",
+    "body-history": "status is implemented but no section records what was built.",
+    "stale-index": "The index file is missing or doesn't match the current frontmatter.",
+}
+
 # Front roles each plan type must have (see "The body" in the design note).
 # Each entry is an any-of group: one non-empty section in the group satisfies it.
 REQUIRED_ROLES = {

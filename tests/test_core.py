@@ -359,6 +359,18 @@ def test_index_link_is_relative_to_the_first_scan_dirs_entry(tmp_path):
     assert "(v0.1/0001_x.md)" in text
 
 
+def test_failure_codes_registry_matches_every_code_built_in_the_package():
+    src_dir = Path(core.__file__).parent
+    built: set[str] = set()
+    for path in src_dir.glob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        built.update(re.findall(r'Finding\(\s*"([a-z-]+)"', text, re.S))
+    assert built, "found no Finding(...) calls to check against FAILURE_CODES"
+    assert built == set(core.FAILURE_CODES), (
+        f"in code but not in FAILURE_CODES: {built - set(core.FAILURE_CODES)}; "
+        f"in FAILURE_CODES but not built anywhere: {set(core.FAILURE_CODES) - built}")
+
+
 def test_scan_dirs_only_reads_designated_directories(tmp_path):
     (tmp_path / "journal" / "plans").mkdir(parents=True)
     (tmp_path / "journal" / "origin").mkdir(parents=True)

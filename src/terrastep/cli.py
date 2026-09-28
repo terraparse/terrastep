@@ -130,6 +130,40 @@ def cmd_install_hooks(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def cmd_skill_build(args: argparse.Namespace) -> int:
+    """Maintainer-only: regenerate this repo's own checked-in generated docs and skill."""
+    from . import skilldoc
+    pkg_dir = Path(skilldoc.__file__).resolve().parent  # src/terrastep, if this is an editable install
+    repo_root = args.root.resolve() if args.root else pkg_dir.parent.parent
+    for rel, text in skilldoc.render_all().items():
+        path = (pkg_dir if rel.startswith("skill/") else repo_root) / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        print(f"wrote {path}")
+    return 0
+
+
+def cmd_skill_install(args: argparse.Namespace) -> int:
+    import shutil
+    from importlib.resources import as_file, files
+
+    root, _ = _load(args)
+    target = root / ".claude" / "skills" / "terrastep"
+    if target.exists() and not args.force:
+        print(f"{target.relative_to(root)} already exists; pass --force to overwrite", file=sys.stderr)
+        return 1
+    with as_file(files("terrastep") / "skill") as bundled:
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(bundled, target)
+    print(f"installed skill to {target.relative_to(root)}")
+    return 0
+
+
+def cmd_skill(args: argparse.Namespace) -> int:
+    return cmd_skill_build(args) if args.skill_action == "build" else cmd_skill_install(args)
+
+
 def cmd_hook(args: argparse.Namespace) -> int:
     root, cfg = _load(args)
     if args.hook_name != "pre-commit":
@@ -175,6 +209,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--force", action="store_true", help="overwrite an existing hook")
     _add_common(p)
     p.set_defaults(func=cmd_install_hooks)
+
+    p = sub.add_parser("skill", help="build (maintainer) or install the bundled Claude Code skill")
+    p.add_argument("skill_action", choices=("build", "install"))
+    p.add_argument("--force", action="store_true", help="overwrite an existing installed skill")
+    _add_common(p)
+    p.set_defaults(func=cmd_skill)
 
     p = sub.add_parser("hook", help="run an installed hook (called by the shim)")
     p.add_argument("hook_name", choices=("pre-commit",))

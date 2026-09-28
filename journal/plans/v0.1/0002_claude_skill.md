@@ -1,13 +1,13 @@
 ---
-status: planning
+status: implemented
 status_changed: 2026-09-28
 type: design
-next: Owner reviews. B1 to B4 need an owner decision before this moves to ready.
+next: None. Sequencing steps 1-7 are done (see "What was built" below). Step 8 (Perry, tmdc-web, publishing publicly) is separate future work.
 ---
 
 # A Claude Code skill for terrastep: generated from core.py, bundled with pip
 
-**Status: PLANNING.** Second terrastep design doc. Follows the decisions reached in chat on
+**Status: IMPLEMENTED.** Second terrastep design doc. Follows the decisions reached in chat on
 2026-09-28 (skill distribution and content-shape options), not a separate origin note.
 
 ## What this is, in one sentence
@@ -156,7 +156,7 @@ consult the skill is still caught by both hooks before the bad document reaches 
 
 ## Blockers
 
-### B1 — Failure codes are scattered string literals, not an enumerable registry [open]
+### B1 — Failure codes are scattered string literals, not an enumerable registry [resolved]
 
 Every rule in `core.py` constructs `Finding("code-name", "message")` inline (e.g.
 `Finding("fm-missing", "no frontmatter block...")`, more than twenty call sites across
@@ -172,7 +172,7 @@ cannot silently drift from the call sites without failing the suite. This is del
 smallest change that makes the codes enumerable — not a refactor of every call site to reference
 the registry.
 
-### B2 — Skill frontmatter can't express "only when the file is under scan_dirs" [open]
+### B2 — Skill frontmatter can't express "only when the file is under scan_dirs" [resolved]
 
 Claude Code's skill-loading matches a textual `description`, not a structural predicate. Left
 unaddressed, the skill either over-triggers (loads for any markdown-writing task, including repos
@@ -186,7 +186,7 @@ puts the structural check inside the procedure the skill teaches, not inside the
 mechanism, which is the only place Claude Code actually runs code before deciding to load
 something.
 
-### B3 — Bundling package data and finding it reliably at runtime, across editable and regular installs [open]
+### B3 — Bundling package data and finding it reliably at runtime, across editable and regular installs [resolved]
 
 `terrastep skill install` needs to locate its own bundled `skill/` directory regardless of whether
 `terrastep` was installed with `pip install -e .` (files under `src/terrastep/`) or a regular
@@ -199,7 +199,7 @@ computed from `__file__` assumptions about the install layout. Add a test that r
 skill install` against both an editable and a built-wheel install of the package in a temp venv,
 confirming both locate the same files.
 
-### B4 — Nothing forces a regenerate before commit or release [open]
+### B4 — Nothing forces a regenerate before commit or release [resolved]
 
 `core.py` can change (a new failure code, a changed alias) without anyone remembering to re-run
 the generator, leaving `terrastep_101.md` and the bundled skill stale relative to the code that
@@ -286,3 +286,45 @@ without regenerating every already-installed skill first.
 8. **Later, each its own decision**: installing the skill into Perry and tmdc-web; publishing
    terrastep publicly (PyPI, public GitHub); a plugin-marketplace distribution path, if ever
    needed.
+
+## What was built (2026-09-28)
+
+Steps 1-7 done, each accepted as recommended, no scope changes. Step 8 is out of scope here
+(each item is a separate future decision, as the plan always said).
+
+- **B1**: `core.FAILURE_CODES`, a `code -> one-line meaning` dict, plus
+  `test_failure_codes_registry_matches_every_code_built_in_the_package` — greps every
+  `Finding(...)` call across `src/terrastep/*.py` (not just `core.py`; `stale-index` is built in
+  `cli.py`/`hooks.py`) and asserts the set matches the registry exactly.
+- **Q5's prerequisite, done alongside B1**: `terrastep.__version__` in `__init__.py` is now the
+  single source of truth for the package version; `pyproject.toml` reads it dynamically
+  (`dynamic = ["version"]`) instead of duplicating it. Generated files stamp this version. See the
+  new "Versioning and the generated docs/skill" section in this repo's `CLAUDE.md` — a version
+  bump is a content change to every generated file, not just a one-line edit, and that note exists
+  so it isn't only caught by the staleness test after the fact.
+- **`src/terrastep/skilldoc.py`**: renders `journal/terrastep_101.md` and the skill from
+  `core.py`/`config.py`'s constants and `cli.py`'s own argparse help text (via introspection of
+  `build_parser()`, not a hand-maintained verb table — one fewer place for the verb list to
+  drift). "How to use them" / the skill's workflow examples stayed hand-authored, as the plan
+  said they would.
+- **B2**: `SKILL.md`'s frontmatter `description` is narrow and textual; its first section,
+  "First: does terrastep even apply here?", is the structural `terrastep.toml`/`scan_dirs` check,
+  run by the agent as an instruction, not enforced by the trigger mechanism itself.
+- **B3**: `skill/**` declared under `[tool.setuptools.package-data]`; `terrastep skill install`
+  locates it with `importlib.resources.files("terrastep") / "skill"` via `as_file()`. Verified
+  against both this repo's editable install and a real, offline, non-editable install
+  (`pip install --no-deps --target`) — both locate the same bundled files (test_skilldoc.py).
+- **B4**: `test_checked_in_generated_files_are_not_stale` — the `stale-index` pattern applied to
+  the generated docs: a change to `core.py`/`config.py`/`cli.py` (or a version bump) that isn't
+  followed by `terrastep skill build` fails the suite, not just goes unnoticed.
+- **Verbs added**: `terrastep skill build` (maintainer-only; regenerates this repo's own checked-in
+  copies) and `terrastep skill install [--force]` (copies the bundled skill into
+  `<repo>/.claude/skills/terrastep/`, refusing to overwrite without `--force`, matching
+  `install-hooks` per Q2).
+- **Dogfooded**: `terrastep skill install --root .` run on this repo; `.claude/skills/terrastep/`
+  committed. `terrastep check` still prints OK on `journal/plans/`.
+- **Test count**: 112 (105 before this doc, plus 1 registry-consistency test and 6 in
+  `test_skilldoc.py`), all passing.
+
+No divergences from the plan as written — every blocker and question resolved exactly as
+recommended, since all recommendations were accepted before implementation started.

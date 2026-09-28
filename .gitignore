@@ -3,4 +3,6 @@ __pycache__/
 *.pyc
 venv/
 .venv/
-tmp/
+tmp/*.egg-info/
+build/
+*.egg

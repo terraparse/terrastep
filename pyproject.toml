@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "terrastep"
+version = "0.1.0"
+description = "A frontmatter and status-index standard for planning documents, plus the CLI that enforces it."
+requires-python = ">=3.10"
+dependencies = [
+    "pyyaml",
+    "tomli; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+terrastep = "terrastep.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

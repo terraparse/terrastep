@@ -88,3 +88,89 @@ def test_check_if_changed_skips_when_nothing_uncommitted(tmp_path, capsys):
                      "commit", "-q", "-m", "base"], cwd=root, check=True)
     assert cli.main(["check", "--root", str(root), "--if-changed"]) == 0
     assert capsys.readouterr().out == ""
+
+
+# The summary line counts index failures apart from document failures. The
+# index file is not a scanned document, so counting it as one printed
+# "3 failure(s) in 2 of 1 document(s)" (found 2026-09-29).
+
+def test_summary_counts_a_stale_index_apart_from_documents(tmp_path, capsys):
+    root = make(tmp_path)
+    assert cli.main(["check", "--root", str(root)]) == 1
+    err = capsys.readouterr().err
+    assert "1 failure(s): 1 in journal/STATUS.md (run `terrastep build`)." in err
+    assert "document(s)" not in err
+
+
+def test_summary_with_a_document_failure_and_a_stale_index(tmp_path, capsys):
+    root = make(tmp_path)
+    (root / "journal" / "a.md").write_text(BAD, encoding="utf-8")
+    assert cli.main(["check", "--root", str(root)]) == 1
+    err = capsys.readouterr().err
+    assert ("2 failure(s): 1 in 1 of 1 document(s); "
+            "1 in journal/STATUS.md (run `terrastep build`).") in err
+
+
+def test_summary_with_only_a_document_failure(tmp_path, capsys):
+    root = make(tmp_path)
+    cli.main(["build", "--root", str(root)])
+    (root / "journal" / "a.md").write_text(BAD, encoding="utf-8")
+    cli.main(["build", "--root", str(root)])
+    capsys.readouterr()
+    assert cli.main(["check", "--root", str(root)]) == 1
+    err = capsys.readouterr().err
+    assert "1 failure(s): 1 in 1 of 1 document(s)." in err
+    assert "STATUS.md" not in err
+
+
+# `check FILE` for a FILE that is not a scanned document is a usage error. It
+# used to print "OK: 1 document(s) pass" and exit 0 without checking anything
+# (found 2026-09-29).
+
+def test_check_rejects_a_file_that_does_not_exist(tmp_path, capsys):
+    root = make(tmp_path)
+    cli.main(["build", "--root", str(root)])
+    missing = root / "journal" / "0099_missing.md"
+    assert cli.main(["check", "--root", str(root), str(missing)]) == 2
+    captured = capsys.readouterr()
+    assert "not a document under journal" in captured.err
+    assert str(missing) in captured.err
+    assert "OK" not in captured.out
+
+
+def test_check_rejects_a_file_outside_scan_dirs(tmp_path, capsys):
+    root = make(tmp_path, scan_dir="journal/plans")
+    (root / "terrastep.toml").write_text('scan_dirs = ["journal/plans"]\n', encoding="utf-8")
+    outside = root / "journal" / "origin" / "handoff.md"
+    outside.parent.mkdir(parents=True)
+    outside.write_text("no frontmatter\n", encoding="utf-8")
+    cli.main(["build", "--root", str(root)])
+    assert cli.main(["check", "--root", str(root), str(outside)]) == 2
+    assert "not a document under journal/plans" in capsys.readouterr().err
+
+
+def test_check_rejects_a_path_outside_the_root_without_a_traceback(tmp_path, capsys):
+    root = make(tmp_path / "repo")
+    cli.main(["build", "--root", str(root)])
+    elsewhere = tmp_path / "elsewhere.md"
+    elsewhere.write_text(GOOD, encoding="utf-8")
+    assert cli.main(["check", "--root", str(root), str(elsewhere)]) == 2
+    assert str(elsewhere) in capsys.readouterr().err
+
+
+def test_check_names_every_unknown_file_and_checks_none(tmp_path, capsys):
+    root = make(tmp_path)
+    cli.main(["build", "--root", str(root)])
+    good = root / "journal" / "a.md"
+    missing = root / "journal" / "b.md"
+    assert cli.main(["check", "--root", str(root), str(good), str(missing)]) == 2
+    captured = capsys.readouterr()
+    assert str(missing) in captured.err and str(good) not in captured.err
+    assert "OK" not in captured.out
+
+
+def test_check_a_scanned_file_still_passes(tmp_path, capsys):
+    root = make(tmp_path)
+    cli.main(["build", "--root", str(root)])
+    assert cli.main(["check", "--root", str(root), str(root / "journal" / "a.md")]) == 0
+    assert "OK: 1 document(s) pass" in capsys.readouterr().out

@@ -95,6 +95,16 @@ def test_precommit_blocks_a_stale_index(repo):
     assert r.returncode != 0 and "stale-index" in r.stderr
 
 
+def test_precommit_summary_counts_a_stale_index_apart_from_documents(repo):
+    # The index file is not a scanned document; counting it as one printed
+    # "1 failure(s) in 1 of 1 document(s)" for a clean document (2026-09-29).
+    (repo / "journal" / "a.md").write_text(GOOD.replace("2026-09-24", "2026-09-25"))
+    git(repo, "add", "journal/a.md")
+    r = commit(repo)
+    assert "1 failure(s): 1 in journal/STATUS.md (run `terrastep build`)." in r.stderr
+    assert "document(s)" not in r.stderr
+
+
 def test_precommit_checks_the_staged_snapshot_not_the_working_tree(repo):
     (repo / "journal" / "a.md").write_text(BAD)
     build(repo)

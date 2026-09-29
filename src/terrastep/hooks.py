@@ -42,8 +42,7 @@ def check_snapshot(root: Path, config: config_mod.Config) -> tuple[bool, str]:
     for rel, items in sorted(failures.items()):
         lines += [f"FAIL: {rel}: {f}" for f in items]
     if failures:
-        n = sum(len(v) for v in failures.values())
-        lines.append(f"\n{n} failure(s) in {len(failures)} of {len(docs)} document(s).")
+        lines.append("\n" + core.failure_summary(failures, len(docs), config))
         return False, "\n".join(lines)
     lines.append(f"OK: {len(docs)} document(s) pass ({sum(len(v) for v in warnings.values())} warning(s)).")
     return True, "\n".join(lines)

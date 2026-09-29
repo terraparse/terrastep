@@ -61,7 +61,21 @@ def cmd_check(args: argparse.Namespace) -> int:
     docs = core.scan_docs(root, cfg)
     only = None
     if args.files:
-        only = {Path(f).resolve().relative_to(root).as_posix() for f in args.files}
+        # A named file that is not a scanned document would otherwise be
+        # skipped by check_docs and still counted as a pass.
+        scanned = {d.rel for d in docs}
+        only, unknown = set(), []
+        for f in args.files:
+            path = Path(f).resolve()
+            rel = path.relative_to(root).as_posix() if path.is_relative_to(root) else None
+            if rel in scanned:
+                only.add(rel)
+            else:
+                unknown.append(f)
+        if unknown:
+            print(f"terrastep check: not a document under {'/'.join(cfg.scan_dirs)}: "
+                  f"{', '.join(unknown)}", file=sys.stderr)
+            return 2
     failures, warnings = core.check_docs(docs, cfg, only)
 
     if only is None:
@@ -80,8 +94,7 @@ def cmd_check(args: argparse.Namespace) -> int:
 
     n_docs = len(docs) if only is None else len(only)
     if failures:
-        n = sum(len(v) for v in failures.values())
-        print(f"\n{n} failure(s) in {len(failures)} of {n_docs} document(s).", file=sys.stderr)
+        print("\n" + core.failure_summary(failures, n_docs, cfg), file=sys.stderr)
         return 1
     print(f"OK: {n_docs} document(s) pass ({sum(len(v) for v in warnings.values())} warning(s)).")
     return 0

@@ -480,6 +480,21 @@ def check_docs(docs: list[Doc], config: Config,
     return failures, warnings
 
 
+def failure_summary(failures: dict[str, list[Finding]], n_docs: int, config: Config) -> str:
+    """The last line of a failing check. The index file is not a scanned
+    document, so its failures are counted apart from the documents'."""
+    index = config.index_rel_path
+    failed_docs = [rel for rel in failures if rel != index]
+    parts = []
+    if failed_docs:
+        n_doc = sum(len(failures[rel]) for rel in failed_docs)
+        parts.append(f"{n_doc} in {len(failed_docs)} of {n_docs} document(s)")
+    if index in failures:
+        parts.append(f"{len(failures[index])} in {index} (run `terrastep build`)")
+    total = sum(len(v) for v in failures.values())
+    return f"{total} failure(s): {'; '.join(parts)}."
+
+
 def next_id(docs: list[Doc], config: Config) -> int:
     return max([config.id_floor] + [d.rfc_id for d in docs if d.rfc_id is not None]) + 1
 

@@ -72,6 +72,10 @@ The permanent `In budget` column (0005) makes an existing user's `STATUS.md` sta
 it has no git remote, no PyPI release, and no installation in another repository. So the bump is
 0.2.0, and the MAJOR rule applies from the first real distribution onward.
 
+0003, 0004 and 0005 each change `cli.py`, so each runs `terrastep skill build`. Their generated
+files describe the new verbs but still stamp 0.1.0, until this design bumps the version. The owner
+accepted this on 2026-09-29. No interim `0.2.0.devN` version is used.
+
 One commit holds the bump in `__init__.py`, `terrastep skill build`, `terrastep skill install
 --root . --force`, and `terrastep build` (`CLAUDE.md`, "Versioning and the generated
 docs/skill"; `distribution.md` section 3).

@@ -2,7 +2,7 @@
 status: planning
 status_changed: 2026-09-29
 type: design
-next: Owner reviews Q1-Q12. Evaluative count 12 is over the proposed limit of 10; see Summary.
+next: Owner reviews Q1-Q12. Over the proposed evaluative limit (12 > 10); owner kept it as one design.
 ---
 
 # Brain budget C: Complexity box, render, scaffold and the final check
@@ -23,7 +23,7 @@ inside `terrastep check` with `--format json`, and the permanent `In budget` col
 the proposed limit is 10. Section 17 of the proposal groups them this way. An honest split
 exists: scaffold and the index column (Q5, Q9, Q12) rely on the final check only through a
 stated contract ("a design passes `terrastep check`" and "`in_budget` for a design"). The owner
-can accept this design as it is or ask for that split.
+decided on 2026-09-29 to keep this as one design, flagged.
 
 ## Scope
 
@@ -71,8 +71,12 @@ moves it into one function, `core.check_corpus(root, docs, cfg, only)`, which bo
 JSON report and the pre-commit hook then read the same results.
 
 `terrastep check --format json` prints the report in proposal section 7.8. Each budgeted design
-has a `brain_budget` block. `corpus` holds `stale-index` and the in-progress cap warning. With
-`--if-changed` and no change, it prints nothing and exits 0, as today.
+has a `brain_budget` block. `corpus` holds `stale-index` and the in-progress cap warning.
+
+With `--if-changed` and no uncommitted change in `scan_dirs`, text output stays as today: nothing,
+exit 0. JSON output prints `{"ok": true, "skipped": true}` and exits 0, so a caller that parses
+stdout always gets a JSON document. Every full report also carries `"skipped": false`. Decided by
+the owner on 2026-09-29.
 
 ### `terrastep design render FILE`
 
@@ -144,6 +148,8 @@ From proposal section 14, "The `In budget` column", "The flag", "Render and scaf
 - The column is present with brain budget on and off. `yes`, `no` and `NA` as above. Crossing a
   limit makes the index stale. Two builds give identical bytes.
 - The JSON report's shape, and its receipt hashes.
+- `check --if-changed --format json` with no change prints exactly `{"ok": true, "skipped": true}`
+  and exits 0. With `--if-changed` and text output, it still prints nothing.
 - `cmd_check` and `hooks.check_snapshot` give identical results on every fixture.
 - `skilldoc` lists `design budget`, `precheck`, `render` and `scaffold` with their flags.
 - terrastep's own journal passes with brain budget on.

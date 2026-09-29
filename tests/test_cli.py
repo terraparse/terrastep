@@ -174,3 +174,49 @@ def test_check_a_scanned_file_still_passes(tmp_path, capsys):
     cli.main(["build", "--root", str(root)])
     assert cli.main(["check", "--root", str(root), str(root / "journal" / "a.md")]) == 0
     assert "OK: 1 document(s) pass" in capsys.readouterr().out
+
+
+# Brain budget (0003): [brain_budget] configuration, ConfigError -> exit 2,
+# and `terrastep design budget`.
+
+def test_a_config_error_exits_2_before_any_document_is_read(tmp_path, capsys):
+    root = make(tmp_path)
+    (root / "terrastep.toml").write_text(
+        'scan_dirs = ["journal"]\n\n[brain_budget]\nenable = true\n', encoding="utf-8")
+    assert cli.main(["check", "--root", str(root)]) == 2
+    captured = capsys.readouterr()
+    assert "configuration error" in captured.err
+    assert "enable" in captured.err
+    assert "OK" not in captured.out and "FAIL" not in captured.err
+
+
+def test_a_config_error_exits_2_for_build_too(tmp_path, capsys):
+    root = make(tmp_path)
+    (root / "terrastep.toml").write_text(
+        'scan_dirs = ["journal"]\n\n[brain_budget.limits]\nword_count = -1\n', encoding="utf-8")
+    assert cli.main(["build", "--root", str(root)]) == 2
+
+
+def test_design_budget_works_and_exits_0_with_brain_budget_off(tmp_path, capsys):
+    root = make(tmp_path)
+    assert cli.main(["design", "budget", "--root", str(root)]) == 0
+    out = capsys.readouterr().out
+    assert "enabled: False" in out
+    assert "policy_id: sha256:4a30b1da8ac7" in out
+    assert "schema_version: sha256:6c16c11afcf0" in out
+
+
+def test_design_budget_json_marks_unset_limits_as_defaults(tmp_path, capsys):
+    root = make(tmp_path)
+    (root / "terrastep.toml").write_text(
+        'scan_dirs = ["journal"]\n\n[brain_budget]\nenabled = true\n\n'
+        '[brain_budget.limits]\nword_count = 2500\n', encoding="utf-8")
+    assert cli.main(["design", "budget", "--root", str(root), "--format", "json"]) == 0
+    import json
+    result = json.loads(capsys.readouterr().out)
+    assert result["enabled"] is True
+    assert result["limits"]["word_count"] == 2500
+    assert set(result["defaults"]) == {"evaluative_count", "dependency_edge_count",
+                                        "largest_coupled_cluster_size"}
+    assert result["policy_id"] == "sha256:cfd3b3f6f3d5"
+    assert result["terrastep_version"]

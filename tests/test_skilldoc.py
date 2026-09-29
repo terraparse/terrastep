@@ -78,3 +78,10 @@ def test_skill_install_works_from_a_regular_non_editable_install(tmp_path):
     installed_text = (install_root / ".claude" / "skills" / "terrastep" / "SKILL.md").read_text()
     bundled_text = (target_dir / "terrastep" / "skill" / "SKILL.md").read_text()
     assert installed_text == bundled_text
+
+
+def test_every_config_help_key_appears_in_the_generated_config_table():
+    from terrastep.config import CONFIG_HELP
+    table = skilldoc._config_table()
+    for key, text in CONFIG_HELP.items():
+        assert text in table, f"CONFIG_HELP[{key!r}] is missing from the generated table"

@@ -13,6 +13,7 @@
 | `terrastep migrate` | propose or apply frontmatter for documents that have none | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep install-hooks` | write the git pre-commit hook | `-h`: show this help message and exit; `--force`: overwrite an existing hook; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep skill` | build (maintainer) or install the bundled Claude Code skill | `-h`: show this help message and exit; `--force`: overwrite an existing installed skill; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
+| `terrastep design` | brain budget: budget (see also: precheck, render, scaffold, added by later designs) | `-h`: show this help message and exit |
 | `terrastep hook` | run an installed hook (called by the shim) | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 
 ### `terrastep.toml`
@@ -28,3 +29,9 @@
 | `warn_bare_section` | `False` | Warn on a `§N` reference with no document named alongside it. |
 | `[migrate] changelog` | (none) | A changelog file: a document it links is proposed as already finished, dated by that line. |
 | `[migrate] plan_dir` | (none) | A directory whose documents default to type: legacy during `migrate propose`. |
+| `[brain_budget] enabled` | `False` | Turns on the brain budget layer for type: design documents. |
+| `[brain_budget] max_retries` | `2` | Retries per design, shared between precheck and check, for fixing failures and for trying a different split to fit the budget. |
+| `[brain_budget.limits] evaluative_count` | `10` | Blocker and question evaluation elements in the document, open or resolved. |
+| `[brain_budget.limits] dependency_edge_count` | `11` | Edges plus depends_on entries. |
+| `[brain_budget.limits] largest_coupled_cluster_size` | `3` | Evaluation elements in the largest coupled cluster. |
+| `[brain_budget.limits] word_count` | `2000` | Words from the H1 to the end of Sequencing, without the Complexity box. |

@@ -1,8 +1,8 @@
 ---
-status: planning
+status: implemented
 status_changed: 2026-09-29
 type: design
-next: Owner reviews Q1-Q7.
+next: None. Sequencing steps 1-4 are done (see "What was built" below). 0004 depends on this.
 ---
 
 # Brain budget A: configuration and identity
@@ -233,3 +233,43 @@ are kebab-case. No `bb-` prefix. The owner decided this on 2026-09-29 (OQ4).
 3. The `design` verb with its `budget` action, and its tests.
 4. `CONFIG_HELP` entries and the `_config_table` rows. Run `terrastep skill build`, the full test
    suite and `terrastep check` on this repository. Commit as one change.
+
+## What was built (2026-09-29)
+
+Steps 1-4 done, each as recommended, no scope changes.
+
+- **`config.py`**: `BudgetLimits` and `BrainBudgetConfig` (frozen dataclasses), `Config.brain_budget`,
+  `ConfigError`, and `_load_brain_budget` — strict validation of `[brain_budget]` and
+  `[brain_budget.limits]` (unknown keys, non-boolean `enabled`, non-integer or negative
+  `max_retries`/limits; `bool` explicitly rejected where an `int` is required, since
+  `type(True) is bool`, not `int`, in Python). `limits_in_file` records which limit keys the
+  repository actually set, so a partial `[brain_budget.limits]` changes only those.
+- **`cli.main`**: catches `ConfigError` around `args.func(args)`, prints
+  `terrastep: configuration error: <message>`, and returns 2 — before any document is scanned,
+  confirmed by hand (`terrastep check` on seven malformed configs, each exiting 2 with no `OK`/`FAIL`
+  document line).
+- **`src/terrastep/budget.py`** (new module, writes no file): `BASE_SCHEMA` (proposal 5.4, minus
+  `properties.schema_version`, `required` unchanged), `FORMAT_DEFINITION` (proposal 6.3, exactly as
+  written), `identity()`, `policy_id()`, `schema_version()`, `working_schema()`. The three golden
+  values from the proposal were reproduced exactly: `policy_id` `sha256:4a30b1da8ac7` for the
+  defaults and `sha256:cfd3b3f6f3d5` with `word_count = 2500`; `schema_version`
+  `sha256:6c16c11afcf0`.
+- **`terrastep design budget [--format json]`**: a new `design` verb with nested subparsers
+  (`design_action`), anticipating 0004's `precheck` and 0005's `render`/`scaffold` under the same
+  verb. Prints `enabled`, `max_retries`, the four limits with unset ones marked `(default)`,
+  `policy_id`, `schema_version`, and the terrastep version; exits 0 with brain budget on or off.
+- **Generated documents**: seven new `CONFIG_HELP` entries and matching rows in
+  `skilldoc._config_table`. `terrastep skill build` regenerated `journal/terrastep_101.md` and
+  `skill/references/verbs.md`; a second run produced no further diff.
+- **Tests**: `tests/test_config.py` (14 tests: defaults, a partial limits table, every
+  unknown-key/wrong-type/negative case), `tests/test_budget.py` (11 tests: the three golden values,
+  that each single limit change changes `policy_id`, that a `FORMAT_DEFINITION` change changes
+  `schema_version`, that `working_schema()`'s `const` matches and `BASE_SCHEMA` is left unmutated),
+  plus 4 tests in `test_cli.py` (`ConfigError` → exit 2 for `check` and `build`, `design budget`
+  text and JSON) and 1 in `test_skilldoc.py` (every `CONFIG_HELP` key appears in the generated
+  table). Full suite: 152 passing (121 before this design).
+- **Confirmed by hand**: the Stop hook shim (`integrations/claude/stop_hook.sh`) blocks on a
+  configuration error exactly as it blocks on any other failing `terrastep check`.
+
+No divergence from the plan as written. `enabled = false` is still this repository's setting
+(0006 turns it on); every existing document's check result is unchanged.

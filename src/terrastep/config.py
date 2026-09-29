@@ -20,6 +20,19 @@ DEFAULT_EXCLUDE: tuple[str, ...] = ("CHANGELOG.md",)
 DEFAULT_ID_FLOOR = 0
 DEFAULT_IN_PROGRESS_CAP = 3
 
+# [brain_budget] and [brain_budget.limits] keys. Unlike every other top-level
+# terrastep.toml key, these two tables are validated strictly (0003, Q2): an
+# unknown key here would otherwise have no effect and no warning.
+BRAIN_BUDGET_KEYS = frozenset({"enabled", "max_retries", "limits"})
+BUDGET_LIMIT_KEYS = frozenset({"evaluative_count", "dependency_edge_count",
+                                "largest_coupled_cluster_size", "word_count"})
+
+
+class ConfigError(Exception):
+    """terrastep.toml has a [brain_budget] or [brain_budget.limits] value that
+    cannot be an effective configuration: an unknown key, or a value of the
+    wrong type or out of range."""
+
 # One line per top-level terrastep.toml key, for `terrastep skill build`'s
 # generated docs (0002). Defaults themselves come from the Config dataclass
 # below, not duplicated here — this only supplies the description text a
@@ -39,6 +52,17 @@ CONFIG_HELP: dict[str, str] = {
                          "finished, dated by that line.",
     "migrate.plan_dir": "A directory whose documents default to type: legacy during "
                         "`migrate propose`.",
+    "brain_budget.enabled": "Turns on the brain budget layer for type: design documents.",
+    "brain_budget.max_retries": "Retries per design, shared between precheck and check, for "
+                                "fixing failures and for trying a different split to fit the "
+                                "budget.",
+    "brain_budget.limits.evaluative_count": "Blocker and question evaluation elements in the "
+                                            "document, open or resolved.",
+    "brain_budget.limits.dependency_edge_count": "Edges plus depends_on entries.",
+    "brain_budget.limits.largest_coupled_cluster_size": "Evaluation elements in the largest "
+                                                        "coupled cluster.",
+    "brain_budget.limits.word_count": "Words from the H1 to the end of Sequencing, without the "
+                                      "Complexity box.",
 }
 
 
@@ -46,6 +70,25 @@ CONFIG_HELP: dict[str, str] = {
 class MigrateConfig:
     changelog: str | None = None
     plan_dir: str | None = None
+
+
+@dataclass(frozen=True)
+class BudgetLimits:
+    """The four brain budget measures and their limits (0003, proposal section 4.1)."""
+    evaluative_count: int = 10
+    dependency_edge_count: int = 11
+    largest_coupled_cluster_size: int = 3
+    word_count: int = 2000
+
+
+@dataclass(frozen=True)
+class BrainBudgetConfig:
+    enabled: bool = False
+    max_retries: int = 2
+    limits: BudgetLimits = field(default_factory=BudgetLimits)
+    # Which BUDGET_LIMIT_KEYS terrastep.toml actually set, so a caller (e.g.
+    # `terrastep design budget`) can mark the rest as defaults.
+    limits_in_file: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -58,6 +101,7 @@ class Config:
     aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
     warn_bare_section: bool = False
     migrate: MigrateConfig = field(default_factory=MigrateConfig)
+    brain_budget: BrainBudgetConfig = field(default_factory=BrainBudgetConfig)
 
     @property
     def excluded_names(self) -> frozenset[str]:
@@ -95,6 +139,41 @@ def find_root(start: Path | None = None) -> Path:
         return start
 
 
+def _int_ge0(value, label: str) -> int:
+    # type(value) is not int, not isinstance: TOML/Python's bool is an int
+    # subclass, and a boolean limit must be rejected (0003).
+    if type(value) is not int or value < 0:
+        raise ConfigError(f"{label} must be an integer >= 0, got {value!r}")
+    return value
+
+
+def _load_brain_budget(data: dict) -> BrainBudgetConfig:
+    bb = data.get("brain_budget", {})
+    if not isinstance(bb, dict):
+        raise ConfigError("[brain_budget] must be a table")
+    unknown = set(bb) - BRAIN_BUDGET_KEYS
+    if unknown:
+        raise ConfigError(f"[brain_budget] has unknown key(s): {sorted(unknown)}")
+
+    enabled = bb.get("enabled", False)
+    if type(enabled) is not bool:
+        raise ConfigError(f"[brain_budget] enabled must be a boolean, got {enabled!r}")
+    max_retries = _int_ge0(bb.get("max_retries", 2), "[brain_budget] max_retries")
+
+    limits_data = bb.get("limits", {})
+    if not isinstance(limits_data, dict):
+        raise ConfigError("[brain_budget.limits] must be a table")
+    unknown_limits = set(limits_data) - BUDGET_LIMIT_KEYS
+    if unknown_limits:
+        raise ConfigError(f"[brain_budget.limits] has unknown key(s): {sorted(unknown_limits)}")
+    limit_values = {key: _int_ge0(value, f"[brain_budget.limits] {key}")
+                    for key, value in limits_data.items()}
+
+    return BrainBudgetConfig(enabled=enabled, max_retries=max_retries,
+                              limits=BudgetLimits(**limit_values),
+                              limits_in_file=frozenset(limit_values))
+
+
 def load(root: Path, config_file: Path | None = None) -> Config:
     path = config_file if config_file is not None else (root / CONFIG_FILENAME)
     if not path.exists():
@@ -112,4 +191,5 @@ def load(root: Path, config_file: Path | None = None) -> Config:
         aliases={k: tuple(v) for k, v in data.get("aliases", {}).items()},
         warn_bare_section=data.get("warn_bare_section", False),
         migrate=MigrateConfig(changelog=migrate_data.get("changelog"), plan_dir=migrate_data.get("plan_dir")),
+        brain_budget=_load_brain_budget(data),
     )

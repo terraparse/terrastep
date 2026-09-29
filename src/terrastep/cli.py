@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import json
 import sys
 from collections import Counter
 from pathlib import Path
 
+from . import __version__
+from . import budget as budget_mod
 from . import config as config_mod
 from . import core, hooks, migrate
 
@@ -177,6 +181,35 @@ def cmd_skill(args: argparse.Namespace) -> int:
     return cmd_skill_build(args) if args.skill_action == "build" else cmd_skill_install(args)
 
 
+def cmd_design_budget(args: argparse.Namespace) -> int:
+    """Read-only: report whether brain budget is on, its effective limits, and
+    both identity stamps. Works, and exits 0, with brain budget off too."""
+    _, cfg = _load(args)
+    bb = cfg.brain_budget
+    limits_dict = dataclasses.asdict(bb.limits)
+    defaults = sorted(config_mod.BUDGET_LIMIT_KEYS - bb.limits_in_file)
+    result = {
+        "enabled": bb.enabled,
+        "max_retries": bb.max_retries,
+        "limits": limits_dict,
+        "defaults": defaults,
+        "policy_id": budget_mod.policy_id(bb.limits),
+        "schema_version": budget_mod.schema_version(),
+        "terrastep_version": __version__,
+    }
+    if args.format == "json":
+        print(json.dumps(result))
+        return 0
+    print(f"enabled: {result['enabled']}")
+    print(f"max_retries: {result['max_retries']}")
+    for key, value in limits_dict.items():
+        print(f"  {key}: {value}" + (" (default)" if key in defaults else ""))
+    print(f"policy_id: {result['policy_id']}")
+    print(f"schema_version: {result['schema_version']}")
+    print(f"terrastep version: {__version__}")
+    return 0
+
+
 def cmd_hook(args: argparse.Namespace) -> int:
     root, cfg = _load(args)
     if args.hook_name != "pre-commit":
@@ -229,6 +262,15 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(p)
     p.set_defaults(func=cmd_skill)
 
+    p = sub.add_parser("design", help="brain budget: budget (see also: precheck, render, "
+                                       "scaffold, added by later designs)")
+    design_sub = p.add_subparsers(dest="design_action", required=True)
+    pd = design_sub.add_parser("budget", help="show whether brain budget is enabled and its "
+                                              "effective limits")
+    pd.add_argument("--format", choices=("text", "json"), default="text", help="output format")
+    _add_common(pd)
+    pd.set_defaults(func=cmd_design_budget)
+
     p = sub.add_parser("hook", help="run an installed hook (called by the shim)")
     p.add_argument("hook_name", choices=("pre-commit",))
     _add_common(p)
@@ -240,7 +282,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except config_mod.ConfigError as exc:
+        print(f"terrastep: configuration error: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

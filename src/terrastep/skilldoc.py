@@ -64,6 +64,21 @@ def _config_table() -> str:
         f"| `warn_bare_section` | `{default.warn_bare_section!r}` | {CONFIG_HELP['warn_bare_section']} |",
         f"| `[migrate] changelog` | (none) | {CONFIG_HELP['migrate.changelog']} |",
         f"| `[migrate] plan_dir` | (none) | {CONFIG_HELP['migrate.plan_dir']} |",
+        f"| `[brain_budget] enabled` | `{default.brain_budget.enabled!r}` | "
+        f"{CONFIG_HELP['brain_budget.enabled']} |",
+        f"| `[brain_budget] max_retries` | `{default.brain_budget.max_retries!r}` | "
+        f"{CONFIG_HELP['brain_budget.max_retries']} |",
+        f"| `[brain_budget.limits] evaluative_count` | "
+        f"`{default.brain_budget.limits.evaluative_count!r}` | "
+        f"{CONFIG_HELP['brain_budget.limits.evaluative_count']} |",
+        f"| `[brain_budget.limits] dependency_edge_count` | "
+        f"`{default.brain_budget.limits.dependency_edge_count!r}` | "
+        f"{CONFIG_HELP['brain_budget.limits.dependency_edge_count']} |",
+        f"| `[brain_budget.limits] largest_coupled_cluster_size` | "
+        f"`{default.brain_budget.limits.largest_coupled_cluster_size!r}` | "
+        f"{CONFIG_HELP['brain_budget.limits.largest_coupled_cluster_size']} |",
+        f"| `[brain_budget.limits] word_count` | `{default.brain_budget.limits.word_count!r}` | "
+        f"{CONFIG_HELP['brain_budget.limits.word_count']} |",
     ]
     return "| Key | Default | Meaning |\n|---|---|---|\n" + "\n".join(rows)
 

@@ -101,7 +101,7 @@ def test_precommit_summary_counts_a_stale_index_apart_from_documents(repo):
     (repo / "journal" / "a.md").write_text(GOOD.replace("2026-09-24", "2026-09-25"))
     git(repo, "add", "journal/a.md")
     r = commit(repo)
-    assert "1 failure(s): 1 in journal/STATUS.md (run `terrastep build`)." in r.stderr
+    assert "1 failure(s): 1 in journal/STATUS.md (fix: run `terrastep build`)." in r.stderr
     assert "document(s)" not in r.stderr
 
 

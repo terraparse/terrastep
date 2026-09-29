@@ -490,7 +490,7 @@ def failure_summary(failures: dict[str, list[Finding]], n_docs: int, config: Con
         n_doc = sum(len(failures[rel]) for rel in failed_docs)
         parts.append(f"{n_doc} in {len(failed_docs)} of {n_docs} document(s)")
     if index in failures:
-        parts.append(f"{len(failures[index])} in {index} (run `terrastep build`)")
+        parts.append(f"{len(failures[index])} in {index} (fix: run `terrastep build`)")
     total = sum(len(v) for v in failures.values())
     return f"{total} failure(s): {'; '.join(parts)}."
 

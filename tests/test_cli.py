@@ -98,7 +98,7 @@ def test_summary_counts_a_stale_index_apart_from_documents(tmp_path, capsys):
     root = make(tmp_path)
     assert cli.main(["check", "--root", str(root)]) == 1
     err = capsys.readouterr().err
-    assert "1 failure(s): 1 in journal/STATUS.md (run `terrastep build`)." in err
+    assert "1 failure(s): 1 in journal/STATUS.md (fix: run `terrastep build`)." in err
     assert "document(s)" not in err
 
 
@@ -108,7 +108,7 @@ def test_summary_with_a_document_failure_and_a_stale_index(tmp_path, capsys):
     assert cli.main(["check", "--root", str(root)]) == 1
     err = capsys.readouterr().err
     assert ("2 failure(s): 1 in 1 of 1 document(s); "
-            "1 in journal/STATUS.md (run `terrastep build`).") in err
+            "1 in journal/STATUS.md (fix: run `terrastep build`).") in err
 
 
 def test_summary_with_only_a_document_failure(tmp_path, capsys):

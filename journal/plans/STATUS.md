@@ -8,13 +8,22 @@ Newest status change first. Regenerate with `terrastep build`.
 
 Nothing is ready or in progress.
 
-## Planning — awaiting the owner (0)
-
-Nothing is in planning.
-
-## All (2 with frontmatter)
+## Planning — awaiting the owner (4)
 
 | Changed | No. | Doc | Type | Status | Next |
 |---|---|---|---|---|---|
+| 2026-09-29 | 0006 | [0006_brain_budget_skill_and_release.md](v0.2/0006_brain_budget_skill_and_release.md) | design | planning | Owner reviews Q1-Q6. |
+| 2026-09-29 | 0005 | [0005_brain_budget_box_render_scaffold_check.md](v0.2/0005_brain_budget_box_render_scaffold_check.md) | design | planning | Owner reviews Q1-Q12. Evaluative count 12 is over the proposed limit of 10; see Summary. |
+| 2026-09-29 | 0004 | [0004_brain_budget_declarations_and_precheck.md](v0.2/0004_brain_budget_declarations_and_precheck.md) | design | planning | Owner reviews Q1-Q4. |
+| 2026-09-29 | 0003 | [0003_brain_budget_config_and_identity.md](v0.2/0003_brain_budget_config_and_identity.md) | design | planning | Owner reviews Q1-Q7. |
+
+## All (6 with frontmatter)
+
+| Changed | No. | Doc | Type | Status | Next |
+|---|---|---|---|---|---|
+| 2026-09-29 | 0006 | [0006_brain_budget_skill_and_release.md](v0.2/0006_brain_budget_skill_and_release.md) | design | planning | Owner reviews Q1-Q6. |
+| 2026-09-29 | 0005 | [0005_brain_budget_box_render_scaffold_check.md](v0.2/0005_brain_budget_box_render_scaffold_check.md) | design | planning | Owner reviews Q1-Q12. Evaluative count 12 is over the proposed limit of 10; see Summary. |
+| 2026-09-29 | 0004 | [0004_brain_budget_declarations_and_precheck.md](v0.2/0004_brain_budget_declarations_and_precheck.md) | design | planning | Owner reviews Q1-Q4. |
+| 2026-09-29 | 0003 | [0003_brain_budget_config_and_identity.md](v0.2/0003_brain_budget_config_and_identity.md) | design | planning | Owner reviews Q1-Q7. |
 | 2026-09-28 | 0002 | [0002_claude_skill.md](v0.1/0002_claude_skill.md) | design | implemented | None. Sequencing steps 1-7 are done (see "What was built" below). Step 8 (Perry, tmdc-web, publishing publicly) is separate future work. |
 | 2026-09-28 | 0001 | [0001_python_package_and_cli.md](v0.1/0001_python_package_and_cli.md) | design | implemented | None. Sequencing steps 1-9 are done (see "What was built" below). Step 10 (the tmdc-web corpus, the skills doc, the Perry switch doc) is separate future work. |

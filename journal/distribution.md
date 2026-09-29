@@ -7,16 +7,13 @@ what terrastep checks once it's there.
 
 ## 1. Getting terrastep ready for easy project-by-project installation
 
-These are one-time steps for this repository, not per-consumer steps. None of them are done yet —
-this section is the checklist, not a record of what happened.
+This section is a checklist; items are marked done as they happen, not all done up front.
 
-1. **Add a `LICENSE` file.** There isn't one yet. "Permissive" (MIT or Apache-2.0) was the stated
-   intent (2026-09-28 chat); pick one and add it at the repo root before anyone else is expected to
-   depend on this. `pip` and GitHub both read it; without it, the terms anyone installing terrastep
-   is operating under are undefined.
-2. **Add license/author metadata to `pyproject.toml`**: `license = {text = "..."}` (or
-   `{file = "LICENSE"}`), `authors`, and a `[project.urls]` table (`Repository`, maybe `Issues`)
-   once (3) exists. PyPI's project page and `pip show terrastep` both read these.
+1. **Add a `LICENSE` file. Done (2026-09-28), MIT.** `pip` and GitHub both read it; without it,
+   the terms anyone installing terrastep is operating under are undefined.
+2. **Add license/author metadata to `pyproject.toml`. Done (2026-09-28)**: `license = {file =
+   "LICENSE"}`, `authors`, and an OSI classifier. Still open: a `[project.urls]` table
+   (`Repository`, maybe `Issues`) — needs (3) to exist first, so there's a URL to point at.
 3. **Push this repository to a public GitHub remote.** Today `git remote -v` is empty — this repo
    has never been pushed anywhere. Once it has a remote:
    ```

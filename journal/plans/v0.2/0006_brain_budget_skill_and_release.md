@@ -1,8 +1,9 @@
 ---
-status: planning
+status: implemented
 status_changed: 2026-09-29
 type: design
-next: Owner reviews Q1-Q6.
+next: "None. Sequencing steps 1-4 are done (see \"What was built\" below). The pilot (step 5) was
+  dropped by the owner as too much work for too little value."
 ---
 
 # Brain budget D: agent procedure, generated documents and the 0.2.0 release
@@ -15,8 +16,15 @@ complete `terrastep design` verb set, the layer inside `terrastep check`, and th
 column.
 
 This design teaches the agent the brain budget procedure through the generated skill, releases
-terrastep 0.2.0, turns brain budget on in terrastep's own `terrastep.toml`, and starts the pilot
-that tests the limits and the flag hypothesis.
+terrastep 0.2.0, and turns brain budget on in terrastep's own `terrastep.toml`.
+
+**The pilot (proposal section 15) is dropped.** The owner decided on 2026-09-29 that recording a
+mental-effort rating after every design review, by hand, for an indefinite number of designs, is
+too much ongoing work for what it would tell a one-owner repository right now. Section 15's
+questions — is the flag hypothesis holding, is `max_retries = 2` the right spend — stay
+unanswered until the owner decides they are worth that cost. Nothing here prevents starting the
+pilot later; it would still read `policy_id` and `in_budget` straight from each design's
+frontmatter.
 
 ## Scope
 
@@ -29,10 +37,9 @@ In scope:
 - The `CLAUDE.md` line "Plan and design work with the terrastep skill."
 - The 0.2.0 version bump.
 - Dogfooding: `enabled = true` in this repository.
-- The pilot plan (proposal section 15).
 
-Not in scope: a Codex skill (Q2), a tool that counts retries (Q3), a new required
-`verification` section (Q4), and CI.
+Not in scope: the pilot (dropped, see Summary), a Codex skill (Q2), a tool that counts retries
+(Q3), a new required `verification` section (Q4), and CI.
 
 ## The design
 
@@ -87,18 +94,10 @@ After the release, this repository's `terrastep.toml` gets `[brain_budget] enabl
 every one of them, so `terrastep check` still passes. The next terrastep design is the first one
 written under the budget, with the procedure in the skill.
 
-### The pilot
+### The pilot: dropped
 
-The pilot follows proposal section 15. For each design written under the budget, the owner
-records: the policy (`policy_id`), `in_budget`, the measures, the retries used (from the chat
-report, Q3), the active review time, and one nine-point mental-effort rating right after the
-review. For each flagged design, the owner also records whether the excess was an irreducible
-coupled cluster. The records go into a `type: note` document in `journal/plans/`, one row per
-design.
-
-The pilot has no fixed end. This design reaches `implemented` when the procedure ships and the
-first budgeted design is written. The pilot's results go into a later design that proposes limit
-changes, one limit at a time.
+Skipped by owner decision (see Summary). No pilot note document is created. Q5's answer
+("a `type: note` document, one row per design") is not built.
 
 ## Verification
 
@@ -149,7 +148,8 @@ terrastep does not require one today (OQ9).
 ### Q5 — Where do the pilot records live?
 
 **Recommendation:** a `type: note` document in `journal/plans/`, one row per budgeted design.
-The limits change only through a later design.
+The limits change only through a later design. **Moot:** the owner dropped the pilot itself on
+2026-09-29 (see Summary), so this was never built.
 
 ### Q6 — What is the version number?
 
@@ -162,7 +162,7 @@ The limits change only through a later design.
 2. Defer the Codex skill to its own design (Q2).
 3. Report retries in the chat summary only (Q3).
 4. Do not require a `verification` section (Q4).
-5. Keep pilot records in a `type: note` document (Q5).
+5. Keep pilot records in a `type: note` document, if the pilot is ever started (Q5, moot for now).
 6. Release 0.2.0 (Q6).
 
 ## Sequencing
@@ -171,6 +171,42 @@ The limits change only through a later design.
 2. The generated `references/brain_budget.md` and the new part of `terrastep_101.md`.
 3. The version bump to 0.2.0, `terrastep skill build`, `terrastep skill install --root .
    --force`, `terrastep build`, the full suite and `terrastep check`. One commit.
-4. `enabled = true` in this repository's `terrastep.toml`, the `CLAUDE.md` line, and the pilot
-   note. Check the skill by hand in a Claude Code session.
-5. Write the next terrastep design under the budget. Record it in the pilot note.
+4. `enabled = true` in this repository's `terrastep.toml`, and the `CLAUDE.md` line. Check the
+   skill by hand in a Claude Code session.
+
+The pilot (proposal section 15) is dropped; there is no step 5.
+
+## What was built (2026-09-29)
+
+Steps 1-4 done, each as recommended, no scope changes. Step 5 (the pilot) was dropped by the
+owner before this design was implemented — see Summary and Q5.
+
+- **`skilldoc.py`**: `SKILL.md` gained the "Writing design documents under a brain budget"
+  section (proposal 10.11, verbatim, no limit values), inserted right after "Writing a new
+  `type: design` document". That section's own "Scaffold" step now says to run
+  `terrastep design scaffold` instead of hand-writing frontmatter — true whether brain budget is
+  on or off. The skill's `description` was replaced with the proposal's exact new text.
+- **`skill/references/brain_budget.md`** (new, generated): the four measures and their default
+  limits, the live ledger schema (with the running `schema_version` in its `const`), the edge and
+  prerequisite rules as fixed prose, every `brain-budget-*` failure code from `FAILURE_CODES`, and
+  the `[brain_budget]` configuration rows — the last of these now shared with `_config_table` via
+  one helper (`_brain_budget_config_rows`), so the two tables cannot drift apart.
+- **`journal/terrastep_101.md`**: a new "3. Brain budget" part (bumping "How to use them" to "4."),
+  with the same measures table.
+- **`CLAUDE.md`**: a "Planning and design work" section with the line the design specifies.
+- **Version**: `__init__.py` bumped to `0.2.0`. `terrastep skill build`, `terrastep skill install
+  --root . --force`, and `terrastep build` all ran in the same change as the bump, per `CLAUDE.md`'s
+  own rule that a version bump is a content change to every generated file.
+- **Dogfooding**: `[brain_budget] enabled = true` added to this repository's own `terrastep.toml`.
+  0001-0006 are all `implemented` (0006 marked so in this same commit), so the layer's
+  `planning`/`ready` status scope skips every one of them; `terrastep check` still passes.
+- **Verified by hand, in this Claude Code session**: after this repo's own `.claude/skills/terrastep/`
+  was refreshed via `terrastep skill install --force`, the skill listing shown to the session
+  updated to the new `description` text before this paragraph was written — confirming the
+  harness picks up the regenerated file, not a cached copy.
+- **One test update**: `test_render_all_produces_the_four_expected_files` renamed and updated to
+  expect the fifth generated file.
+
+No divergence from the plan as written, apart from dropping the pilot (an explicit owner decision,
+not a technical finding). `enabled = true` is now this repository's setting, so the next terrastep
+design is the first one written under the budget.

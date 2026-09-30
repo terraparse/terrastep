@@ -1,5 +1,9 @@
 # terrastep
 
+## Planning and design work
+
+Plan and design work with the terrastep skill.
+
 ## Python
 
 - Use the local venv at `venv/` for all Python. Never use the system `python3`, `pip` or `pytest`.

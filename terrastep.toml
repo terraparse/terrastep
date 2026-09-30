@@ -1,1 +1,4 @@
 scan_dirs = ["journal/plans"]
+
+[brain_budget]
+enabled = true

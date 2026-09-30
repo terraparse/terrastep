@@ -8,17 +8,15 @@ Newest status change first. Regenerate with `terrastep build`.
 
 Nothing is ready or in progress.
 
-## Planning — awaiting the owner (1)
+## Planning — awaiting the owner (0)
 
-| Changed | No. | Doc | Type | Status | In budget | Next |
-|---|---|---|---|---|---|---|
-| 2026-09-29 | 0006 | [0006_brain_budget_skill_and_release.md](v0.2/0006_brain_budget_skill_and_release.md) | design | planning | NA | Owner reviews Q1-Q6. |
+Nothing is in planning.
 
 ## All (6 with frontmatter)
 
 | Changed | No. | Doc | Type | Status | In budget | Next |
 |---|---|---|---|---|---|---|
-| 2026-09-29 | 0006 | [0006_brain_budget_skill_and_release.md](v0.2/0006_brain_budget_skill_and_release.md) | design | planning | NA | Owner reviews Q1-Q6. |
+| 2026-09-29 | 0006 | [0006_brain_budget_skill_and_release.md](v0.2/0006_brain_budget_skill_and_release.md) | design | implemented | NA | None. Sequencing steps 1-4 are done (see "What was built" below). The pilot (step 5) was dropped by the owner as too much work for too little value. |
 | 2026-09-29 | 0005 | [0005_brain_budget_box_render_scaffold_check.md](v0.2/0005_brain_budget_box_render_scaffold_check.md) | design | implemented | NA | None. Sequencing steps 1-8 are done (see "What was built" below). 0006 depends on this. |
 | 2026-09-29 | 0004 | [0004_brain_budget_declarations_and_precheck.md](v0.2/0004_brain_budget_declarations_and_precheck.md) | design | implemented | NA | None. Sequencing steps 1-6 are done (see "What was built" below). 0005 depends on this. |
 | 2026-09-29 | 0003 | [0003_brain_budget_config_and_identity.md](v0.2/0003_brain_budget_config_and_identity.md) | design | implemented | NA | None. Sequencing steps 1-4 are done (see "What was built" below). 0004 depends on this. |

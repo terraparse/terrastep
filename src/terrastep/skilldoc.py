@@ -13,8 +13,9 @@ callers (cli.py) do that.
 from __future__ import annotations
 
 import argparse
+import json
 
-from . import __version__, core
+from . import __version__, budget, core
 from .cli import build_parser
 from .config import CONFIG_HELP, Config
 
@@ -63,6 +64,28 @@ def _verb_table() -> str:
     return "| Verb | Does | Flags |\n|---|---|---|\n" + "\n".join(rows)
 
 
+def _brain_budget_config_rows() -> list[str]:
+    """Just the [brain_budget]/[brain_budget.limits] rows — shared by the full
+    config table (terrastep_101.md, verbs.md) and the brain budget reference
+    (0006), which shows only these."""
+    bb = Config().brain_budget
+    return [
+        f"| `[brain_budget] enabled` | `{bb.enabled!r}` | {CONFIG_HELP['brain_budget.enabled']} |",
+        f"| `[brain_budget] max_retries` | `{bb.max_retries!r}` | "
+        f"{CONFIG_HELP['brain_budget.max_retries']} |",
+        f"| `[brain_budget.limits] evaluative_count` | `{bb.limits.evaluative_count!r}` | "
+        f"{CONFIG_HELP['brain_budget.limits.evaluative_count']} |",
+        f"| `[brain_budget.limits] dependency_edge_count` | "
+        f"`{bb.limits.dependency_edge_count!r}` | "
+        f"{CONFIG_HELP['brain_budget.limits.dependency_edge_count']} |",
+        f"| `[brain_budget.limits] largest_coupled_cluster_size` | "
+        f"`{bb.limits.largest_coupled_cluster_size!r}` | "
+        f"{CONFIG_HELP['brain_budget.limits.largest_coupled_cluster_size']} |",
+        f"| `[brain_budget.limits] word_count` | `{bb.limits.word_count!r}` | "
+        f"{CONFIG_HELP['brain_budget.limits.word_count']} |",
+    ]
+
+
 def _config_table() -> str:
     default = Config()
     rows = [
@@ -75,23 +98,23 @@ def _config_table() -> str:
         f"| `warn_bare_section` | `{default.warn_bare_section!r}` | {CONFIG_HELP['warn_bare_section']} |",
         f"| `[migrate] changelog` | (none) | {CONFIG_HELP['migrate.changelog']} |",
         f"| `[migrate] plan_dir` | (none) | {CONFIG_HELP['migrate.plan_dir']} |",
-        f"| `[brain_budget] enabled` | `{default.brain_budget.enabled!r}` | "
-        f"{CONFIG_HELP['brain_budget.enabled']} |",
-        f"| `[brain_budget] max_retries` | `{default.brain_budget.max_retries!r}` | "
-        f"{CONFIG_HELP['brain_budget.max_retries']} |",
-        f"| `[brain_budget.limits] evaluative_count` | "
-        f"`{default.brain_budget.limits.evaluative_count!r}` | "
-        f"{CONFIG_HELP['brain_budget.limits.evaluative_count']} |",
-        f"| `[brain_budget.limits] dependency_edge_count` | "
-        f"`{default.brain_budget.limits.dependency_edge_count!r}` | "
-        f"{CONFIG_HELP['brain_budget.limits.dependency_edge_count']} |",
-        f"| `[brain_budget.limits] largest_coupled_cluster_size` | "
-        f"`{default.brain_budget.limits.largest_coupled_cluster_size!r}` | "
-        f"{CONFIG_HELP['brain_budget.limits.largest_coupled_cluster_size']} |",
-        f"| `[brain_budget.limits] word_count` | `{default.brain_budget.limits.word_count!r}` | "
-        f"{CONFIG_HELP['brain_budget.limits.word_count']} |",
+        *_brain_budget_config_rows(),
     ]
     return "| Key | Default | Meaning |\n|---|---|---|\n" + "\n".join(rows)
+
+
+def _measures_table() -> str:
+    limits = Config().brain_budget.limits
+    rows = budget.FORMAT_DEFINITION["complexity"]["rows"]
+    lines = ["| Measure | Label | Default limit |", "|---|---|---:|"]
+    lines += [f"| `{machine}` | {label} | {getattr(limits, machine)} |" for machine, label in rows]
+    return "\n".join(lines)
+
+
+def _brain_budget_code_table() -> str:
+    rows = [f"| `{code}` | {msg} |" for code, msg in core.FAILURE_CODES.items()
+            if code.startswith("brain-budget-")]
+    return "| Code | Meaning |\n|---|---|\n" + "\n".join(rows)
 
 
 def _states_and_types_table() -> str:
@@ -112,7 +135,7 @@ def _role_alias_table() -> str:
 
 
 TERRASTEP_101_HOW_TO_USE = """\
-## 3. How to use them
+## 4. How to use them
 
 **Starting a new proposal:**
 
@@ -187,6 +210,16 @@ def render_terrastep_101() -> str:
         "- **Claude Code Stop hook** (`integrations/claude/stop_hook.sh`): before a session ends, "
         "runs `terrastep check --if-changed` and blocks the stop if it fails. Silent when nothing "
         "under `scan_dirs` changed.\n",
+        "\n## 3. Brain budget\n",
+        "An optional layer on `type: design` documents, off by default. `[brain_budget] enabled "
+        "= true` in `terrastep.toml` turns it on: it measures how much judgment a design's "
+        "reviewer must give at once, shows the result in a `## Complexity` section terrastep "
+        "writes, and never fails a document for being over its limits — only for a malformed "
+        "ledger. `terrastep design budget|precheck|render|scaffold` and the fields "
+        "`terrastep check --format json` adds are in \"2. The tools\" above; the full ledger "
+        "schema and edge rules are in the bundled skill's `references/brain_budget.md`.\n",
+        _measures_table(),
+        "",
         TERRASTEP_101_HOW_TO_USE,
     ]
     return "\n".join(parts) + "\n"
@@ -209,9 +242,8 @@ and stop reading here. This skill only governs documents that terrastep itself w
 ## Writing a new `type: design` document
 
 1. `terrastep next-id` for the number.
-2. Scaffold: frontmatter (`status: planning`, today's `status_changed`, `type: design`, `next`),
-   at least a `summary` or `motivation` section, then exactly `## Blockers`, `## Questions`,
-   `## Recommendations`, `## Sequencing` in that order. See `references/format.md` for the full
+2. Scaffold: `terrastep design scaffold --title "..."` (works whether brain budget is on or off).
+   Never write the frontmatter or the file by hand. See `references/format.md` for the full body
    shape (item tags, recommendation coverage, role headings).
 3. `terrastep check`. On any failure, look up the code in `references/format.md` and fix it —
    don't guess twice at the same rule.
@@ -219,6 +251,54 @@ and stop reading here. This skill only governs documents that terrastep itself w
 5. Re-run `terrastep check` before finishing the turn. Closing this loop here is what makes the
    pre-commit and Stop hooks (already installed if this repo ran `terrastep install-hooks`)
    uneventful rather than a surprise later.
+
+## Writing design documents under a brain budget
+
+Use this procedure when you are asked to plan or design work and `terrastep design budget`
+reports `"enabled": true`. When it reports `false`, follow the design procedure above without
+the budget steps.
+
+1. **Read the budget.** Run `terrastep design budget --format json`. Use its limits and
+   `max_retries`. Do not assume the defaults. Do not copy the limits into any file.
+2. **Decompose before writing.** List every evaluation element: each consequential choice
+   (another plausible answer would change behavior, a public contract, persistent state, access
+   control, or the implementation approach; a recommended default still counts) and each
+   assumption the reviewer must judge. An evaluation element that must be settled or verified
+   before work starts is a blocker; any other is a question. For each pair of evaluation
+   elements, ask: "If the first answer changed, would I have to reconsider the second? What
+   specific constraint would change?" Keep coupled evaluation elements in one design. Split
+   designs only where one design can rely on a stated contract from another. There is no limit
+   on the number of designs.
+3. **Order the designs** so each comes after its prerequisites. A prerequisite must pass
+   `terrastep check` before you scaffold a design that depends on it.
+4. **Scaffold** each design with `terrastep design scaffold`. Never create or overwrite a design
+   file by hand.
+5. **Declare.** Read each prerequisite's file for its contract. Write the evaluation elements in
+   Blockers and Questions, each with a recommendation. In `brain_budget`, add the edges and a
+   `contract` for each `depends_on` entry. Use `sequencing` (supplier to consumer) only when the
+   supplying answer can stay fixed. Use `coupled` when the evaluation elements must be judged
+   together, or when you are unsure. One record per pair, direct constraints only. Never write
+   `schema_version`, `policy_id`, or the Complexity box.
+6. **Precheck** with `terrastep design precheck FILE --format json` before you write prose. Fix
+   what it reports. If a measure is over budget and an honest re-split exists, try it. If the
+   excess is a coupled cluster, keep it together; the design will be flagged.
+7. **Write the prose.** Replace every draft marker. Recommendations must mention every open
+   evaluation element. If writing reveals a new choice, assumption or dependency, make it an
+   evaluation element or an edge and precheck again.
+8. **Render and check.** Run `terrastep design render FILE`, then
+   `terrastep check FILE --format json`. Patch only what the diagnostics name. Render again if a
+   patch changes a measure. Check again after the last edit.
+9. **Respect `max_retries`.** A retry is one round of changes after a reported failure or an
+   over-budget measure. The count is per design, shared between precheck and check. When it runs
+   out, deliver the design: flagged if it is over budget, or as a failed draft if format
+   failures remain.
+10. **Finish.** Run `terrastep build`, then `terrastep check`. Report each design in
+    prerequisite order, with whether it is within budget, which measure is over and what split
+    you tried, and its open blockers. Never claim a check that did not run.
+
+Never make a design look within budget by deleting a real evaluation element, merging
+independent evaluation elements, leaving a choice in prose, relabeling a coupled edge as
+sequencing, or splitting coupled evaluation elements across designs.
 
 ## Fixing a document that fails `terrastep check`
 
@@ -247,10 +327,10 @@ def render_skill_md() -> str:
     frontmatter = (
         "---\n"
         "name: terrastep\n"
-        "description: Use when writing, reviewing, or checking a terrastep design/plan/proposal "
-        "document, or a task mentions terrastep, scan_dirs, or the Blockers/Questions/"
-        "Recommendations/Sequencing document shape. Not for markdown outside a repository's "
-        "terrastep scan_dirs.\n"
+        "description: Use when writing, reviewing, or checking a terrastep design document, "
+        "when asked to plan or design work in a repository with a terrastep.toml, or when a "
+        "task mentions terrastep, scan_dirs, brain budget, or the "
+        "Blockers/Questions/Recommendations/Sequencing shape.\n"
         f"terrastep_version: {__version__}\n"
         "---\n"
     )
@@ -258,7 +338,8 @@ def render_skill_md() -> str:
         f"\n{GENERATED_NOTE} (terrastep {__version__})\n\n"
         "# terrastep\n\n"
         "terrastep checks planning documents against a frontmatter-and-body format. Full spec: "
-        "`references/format.md`. Full verb/config reference: `references/verbs.md`.\n\n"
+        "`references/format.md`. Full verb/config reference: `references/verbs.md`. The optional "
+        "brain budget layer: `references/brain_budget.md`.\n\n"
         + SKILL_PROCEDURE
     )
     return frontmatter + body
@@ -288,6 +369,51 @@ def render_reference_verbs() -> str:
     return "\n".join(parts) + "\n"
 
 
+BRAIN_BUDGET_EDGE_RULES = """\
+An edge is a direct constraint between two evaluation elements in the same design: the answer to
+one changes the possible answers, required behavior, or acceptance criteria of the other. Two
+elements about the same topic do not need an edge for that reason alone.
+
+For each pair, ask: "If the answer to the first changed, would I have to reconsider the answer to
+the second? What specific constraint would change?" If yes, declare an edge and write the
+constraint in `contract`. If no, declare nothing.
+
+- **`sequencing`**: one element supplies a contract that the other uses without reopening the
+  supplier. `from` is the supplier, `to` is the consumer.
+- **`coupled`**: the elements must be judged together because their tradeoffs or validity
+  constrain each other. If it is uncertain whether they can be judged separately, use `coupled`.
+- Declare direct constraints only. If Q1 constrains Q2 and Q2 constrains Q3, do not add Q1 → Q3
+  just because that path exists.
+- One record per pair. A `coupled` relationship replaces a `sequencing` record for the same pair.
+
+A prerequisite (`depends_on`) means this design cannot deliver its behavior until another design
+supplies a specific interface, invariant or capability — not that the other design merely comes
+earlier or covers a related feature. If this design's choices could invalidate the other design's
+contract, the elements are coupled, not sequenced: put them in one design instead.
+"""
+
+
+def render_reference_brain_budget() -> str:
+    parts = [
+        _header("brain budget reference"),
+        "An optional layer on `type: design` documents, off by default "
+        "(`[brain_budget] enabled = false`). See `SKILL.md`'s \"Writing design documents under a "
+        "brain budget\" for the procedure, and `references/verbs.md` for every `terrastep design` "
+        "verb.\n",
+        "### The four measures\n",
+        _measures_table(),
+        "\n### The ledger schema (JSON Schema 2020-12, this package's version)\n",
+        "```json\n" + json.dumps(budget.working_schema(), indent=2) + "\n```\n",
+        "### Declaring edges and prerequisites\n",
+        BRAIN_BUDGET_EDGE_RULES,
+        "### Failure codes\n",
+        _brain_budget_code_table(),
+        "\n### Configuration\n",
+        "| Key | Default | Meaning |\n|---|---|---|\n" + "\n".join(_brain_budget_config_rows()),
+    ]
+    return "\n".join(parts) + "\n"
+
+
 def render_all() -> dict[str, str]:
     """{relative path: content} for every generated file, terrastep_101.md and the skill."""
     return {
@@ -295,4 +421,5 @@ def render_all() -> dict[str, str]:
         "skill/SKILL.md": render_skill_md(),
         "skill/references/format.md": render_reference_format(),
         "skill/references/verbs.md": render_reference_verbs(),
+        "skill/references/brain_budget.md": render_reference_brain_budget(),
     }

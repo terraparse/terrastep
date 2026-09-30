@@ -220,3 +220,122 @@ def test_design_budget_json_marks_unset_limits_as_defaults(tmp_path, capsys):
                                         "largest_coupled_cluster_size"}
     assert result["policy_id"] == "sha256:cfd3b3f6f3d5"
     assert result["terrastep_version"]
+
+
+# `terrastep design precheck` (0004): the declarations stage.
+
+from terrastep import budget as budget_mod_for_tests
+from terrastep.config import BudgetLimits as _BudgetLimits
+
+_SV = budget_mod_for_tests.schema_version()
+_PID = budget_mod_for_tests.policy_id(_BudgetLimits())
+
+_DESIGN_BODY = """## Summary
+
+s
+
+## Blockers
+
+### B1 — a blocker [open]
+
+**Recommendation:** r1.
+
+## Questions
+
+### Q1 — a question
+
+**Recommendation:** r2.
+
+### Q2 — another question
+
+**Recommendation:** r3.
+
+## Recommendations
+
+B1, Q1, Q2.
+
+## Sequencing
+
+do it.
+"""
+
+
+def _design_doc(edges="[]") -> str:
+    return (f"---\nstatus: planning\nstatus_changed: 2026-09-29\ntype: design\nnext: x\n"
+            f"brain_budget:\n  schema_version: {_SV}\n  policy_id: {_PID}\n"
+            f"  depends_on: []\n  edges: {edges}\n---\n# A design\n\n{_DESIGN_BODY}")
+
+
+def _bb_root(tmp_path: Path, enabled: bool = True, edges: str = "[]") -> Path:
+    (tmp_path / "journal" / "plans").mkdir(parents=True)
+    (tmp_path / "journal" / "plans" / "0001_x.md").write_text(_design_doc(edges), encoding="utf-8")
+    toml = 'scan_dirs = ["journal/plans"]\n' + (
+        "[brain_budget]\nenabled = true\n" if enabled else "")
+    (tmp_path / "terrastep.toml").write_text(toml, encoding="utf-8")
+    return tmp_path
+
+
+def test_precheck_refuses_when_brain_budget_is_off(tmp_path, capsys):
+    root = _bb_root(tmp_path, enabled=False)
+    assert cli.main(["design", "precheck", str(root / "journal/plans/0001_x.md"),
+                      "--root", str(root)]) == 1
+    assert "not enabled" in capsys.readouterr().err
+
+
+def test_precheck_exit_2_for_a_file_outside_scan_dirs(tmp_path, capsys):
+    root = _bb_root(tmp_path)
+    outside = tmp_path / "elsewhere.md"
+    outside.write_text(_design_doc(), encoding="utf-8")
+    assert cli.main(["design", "precheck", str(outside), "--root", str(root)]) == 2
+    assert "not a document under journal/plans" in capsys.readouterr().err
+
+
+def test_precheck_exit_1_for_a_non_design_document(tmp_path, capsys):
+    root = _bb_root(tmp_path)
+    note = root / "journal" / "plans" / "0002_note.md"
+    note.write_text(GOOD, encoding="utf-8")  # type: note
+    assert cli.main(["design", "precheck", str(note), "--root", str(root)]) == 1
+    assert "not 'design'" in capsys.readouterr().err
+
+
+def test_precheck_passes_the_worked_example_with_measures_3_2_1(tmp_path, capsys):
+    root = _bb_root(tmp_path, edges='[{from: Q1, to: Q2, type: sequencing, contract: c}]')
+    target = root / "journal/plans/0001_x.md"
+    assert cli.main(["design", "precheck", str(target), "--root", str(root),
+                      "--format", "json"]) == 0
+    import json
+    report = json.loads(capsys.readouterr().out)
+    assert report["measures"]["evaluative_count"] == 3
+    assert report["measures"]["dependency_edge_count"] == 1
+    assert report["measures"]["largest_coupled_cluster_size"] == 1
+    assert report["declarations_valid"] is True
+    assert report["failures"] == []
+
+
+def test_precheck_text_output_ok_line(tmp_path, capsys):
+    root = _bb_root(tmp_path)
+    target = root / "journal/plans/0001_x.md"
+    assert cli.main(["design", "precheck", str(target), "--root", str(root)]) == 0
+    assert "OK: journal/plans/0001_x.md: declarations valid" in capsys.readouterr().out
+
+
+def test_precheck_over_budget_exits_0_with_a_warning(tmp_path, capsys):
+    edges = ('[{from: B1, to: Q1, type: coupled, contract: c}, '
+            '{from: Q1, to: Q2, type: coupled, contract: c}]')
+    root = _bb_root(tmp_path, edges=edges)
+    (root / "terrastep.toml").write_text(
+        'scan_dirs = ["journal/plans"]\n[brain_budget]\nenabled = true\n'
+        "[brain_budget.limits]\nlargest_coupled_cluster_size = 2\n", encoding="utf-8")
+    pid = budget_mod_for_tests.policy_id(_BudgetLimits(largest_coupled_cluster_size=2))
+    target = root / "journal/plans/0001_x.md"
+    target.write_text(target.read_text(encoding="utf-8").replace(_PID, pid), encoding="utf-8")
+    assert cli.main(["design", "precheck", str(target), "--root", str(root)]) == 0
+    err = capsys.readouterr().err
+    assert "WARN: journal/plans/0001_x.md: over budget: largest coupled cluster size 3 > 2" in err
+
+
+def test_precheck_exit_1_on_a_failure(tmp_path, capsys):
+    root = _bb_root(tmp_path, edges='[{from: Q1, to: Q9, type: sequencing, contract: c}]')
+    target = root / "journal/plans/0001_x.md"
+    assert cli.main(["design", "precheck", str(target), "--root", str(root)]) == 1
+    assert "FAIL: journal/plans/0001_x.md: [brain-budget-edge]" in capsys.readouterr().err

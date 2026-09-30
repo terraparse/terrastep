@@ -378,3 +378,39 @@ def test_scan_dirs_only_reads_designated_directories(tmp_path):
     (tmp_path / "journal" / "origin" / "untracked.md").write_text("no frontmatter, not scanned\n", encoding="utf-8")
     docs = core.scan_docs(tmp_path, Config(scan_dirs=("journal/plans",)))
     assert [d.rel for d in docs] == ["journal/plans/0001_x.md"]
+
+
+# core.decision_items (0004): the same item set check_body counts — an item
+# whose letter matches its section, from that section's first occurrence.
+
+def test_decision_items_matches_what_check_body_counts():
+    body = """
+## Blockers
+
+### B1 — x [open]
+
+**Recommendation:** y.
+
+### Q9 — misplaced, wrong letter
+
+**Recommendation:** z.
+
+## Questions
+
+### Q1 — a question
+
+**Recommendation:** w.
+
+## Recommendations
+
+B1, Q1.
+
+## Sequencing
+
+Do it.
+"""
+    role_patterns = core.build_role_patterns({})
+    doc = core.Doc(path=Path("x.md"), rel="x.md", meta={"type": "design"}, yaml_error=None,
+                    body=body, sections=core.parse_sections(body, role_patterns))
+    items = core.decision_items(doc)
+    assert [i.ident for i in items] == ["B1", "Q1"]

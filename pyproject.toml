@@ -19,7 +19,7 @@ dependencies = [
 version = {attr = "terrastep.__version__"}
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "jsonschema"]
 
 [project.scripts]
 terrastep = "terrastep.cli:main"

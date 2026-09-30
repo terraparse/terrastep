@@ -210,6 +210,51 @@ def cmd_design_budget(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_design_precheck(args: argparse.Namespace) -> int:
+    """Read-only: the declarations stage (proposal 7.1) for one design
+    document — its own frontmatter/body-declaration rules plus the brain
+    budget layer's declarations-stage rules. Refuses (exit 1) when brain
+    budget is off; exit 2 names FILE if it is not a scanned document."""
+    root, cfg = _load(args)
+    if not cfg.brain_budget.enabled:
+        print("terrastep design precheck: brain budget is not enabled "
+              "([brain_budget] enabled = true in terrastep.toml)", file=sys.stderr)
+        return 1
+    docs = core.scan_docs(root, cfg)
+    corpus = {d.name: d for d in docs}
+    path = args.file.resolve()
+    rel = path.relative_to(root).as_posix() if path.is_relative_to(root) else None
+    doc = next((d for d in docs if d.rel == rel), None)
+    if doc is None:
+        print(f"terrastep design precheck: not a document under {'/'.join(cfg.scan_dirs)}: "
+              f"{args.file}", file=sys.stderr)
+        return 2
+    if doc.type != "design":
+        print(f"terrastep design precheck: {doc.rel} is type {doc.type!r}, not 'design'",
+              file=sys.stderr)
+        return 1
+
+    names = {d.name for d in docs}
+    extra_failures = core.check_frontmatter(doc, names, cfg)
+    if doc.meta and not doc.yaml_error:
+        body_findings, _body_warnings = core.check_body(doc, cfg)
+        extra_failures += [f for f in body_findings if f.code in budget_mod.PRECHECK_BODY_CODES]
+
+    report = budget_mod.precheck_report(doc, corpus, cfg, extra_failures)
+    if args.format == "json":
+        print(json.dumps(report))
+    else:
+        for f in report["failures"]:
+            print(f"FAIL: {doc.rel}: [{f['code']}] {f['message']}", file=sys.stderr)
+        for w in report["warnings"]:
+            print(f"WARN: {doc.rel}: {w}", file=sys.stderr)
+        if report["declarations_valid"]:
+            print(f"OK: {doc.rel}: declarations valid ({len(report['warnings'])} warning(s)).")
+        else:
+            print(f"\n{len(report['failures'])} failure(s) in the declarations.", file=sys.stderr)
+    return 0 if report["declarations_valid"] else 1
+
+
 def cmd_hook(args: argparse.Namespace) -> int:
     root, cfg = _load(args)
     if args.hook_name != "pre-commit":
@@ -262,14 +307,21 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(p)
     p.set_defaults(func=cmd_skill)
 
-    p = sub.add_parser("design", help="brain budget: budget (see also: precheck, render, "
-                                       "scaffold, added by later designs)")
+    p = sub.add_parser("design", help="brain budget: budget, precheck (see also: render, "
+                                       "scaffold, added by 0005)")
     design_sub = p.add_subparsers(dest="design_action", required=True)
     pd = design_sub.add_parser("budget", help="show whether brain budget is enabled and its "
                                               "effective limits")
     pd.add_argument("--format", choices=("text", "json"), default="text", help="output format")
     _add_common(pd)
     pd.set_defaults(func=cmd_design_budget)
+
+    pp = design_sub.add_parser("precheck", help="the declarations stage: ledger, edges, "
+                                                "evaluation elements, structural measures")
+    pp.add_argument("file", type=Path, help="the design document to precheck")
+    pp.add_argument("--format", choices=("text", "json"), default="text", help="output format")
+    _add_common(pp)
+    pp.set_defaults(func=cmd_design_precheck)
 
     p = sub.add_parser("hook", help="run an installed hook (called by the shim)")
     p.add_argument("hook_name", choices=("pre-commit",))

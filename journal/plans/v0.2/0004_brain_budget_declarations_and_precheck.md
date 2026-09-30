@@ -1,8 +1,8 @@
 ---
-status: planning
+status: implemented
 status_changed: 2026-09-29
 type: design
-next: Owner reviews Q1-Q4.
+next: None. Sequencing steps 1-6 are done (see "What was built" below). 0005 depends on this.
 ---
 
 # Brain budget B: declarations and precheck
@@ -198,3 +198,43 @@ the keyword guard and the conformance test. `jsonschema` only in the `dev` extra
    codes in `FAILURE_CODES`.
 5. `terrastep design precheck` with text and JSON output.
 6. Run `terrastep skill build`, the full suite and `terrastep check`. Commit.
+
+## What was built (2026-09-29)
+
+Steps 1-6 done, each as recommended, no scope changes.
+
+- **`core.py`**: `Doc.fm_text`/`fm_offset` (from an extended `split_frontmatter`); `Finding` gained
+  optional `path`/`expected`/`actual`; `decision_items()` extracted from `check_body`, which now
+  calls it — the whole existing suite (152 tests) passed unchanged after the extraction, proving
+  the refactor behavior-preserving. 9 new `brain-budget-*` codes registered in `FAILURE_CODES`
+  (every code this design builds; `brain-budget-complexity` stays 0005's).
+- **`budget.py`**: the strict YAML loader (`load_ledger`, walking a `yaml.compose()` node — never
+  the constructed dict, since `yaml.safe_load` silently resolves an alias, applies a merge key, and
+  lets a duplicate key overwrite with no error at all, confirmed by direct test against PyYAML);
+  the schema validator (`validate`, exactly the ten keywords the ledger schema uses, cross-checked
+  against real `jsonschema` — now a `dev`-extra dependency — on every fixture); `largest_coupled_cluster`
+  (ported verbatim from the proposal); two cycle detectors (`_any_cycle` for the single-document
+  sequencing-cycle rule, `_cycle_containing` for the cross-document prerequisite cycle, which needs
+  the cycle to specifically involve the file being checked, not just any cycle in the corpus);
+  `check_layer` (rules 1-9 at the declarations stage) and `precheck_report` (the full JSON shape).
+- **`terrastep design precheck FILE [--format json]`**: refuses (exit 1) when brain budget is off
+  or FILE is not `type: design`; exits 2 naming FILE when it is not a scanned document (matching
+  the fix already made to `check`); exits 0 with a warning when a structural measure is over budget
+  (never a failure); exits 1 on any layer or filtered-body failure.
+- **Verified against the proposal's own worked example (5.8)**: measures 3 / 2 / 1, no failures.
+  Verified the proposal's own over-budget example (7.8): a warning reading exactly
+  `over budget: largest coupled cluster size 4 > 3 (B1, Q1, Q2, Q3)`.
+- **Two decisions not spelled out in the design text**, both flagged for the owner:
+  - `corpus` is keyed by `Doc.name` (a bare basename), inferred from the proposal's own bare-filename
+    `depends_on` examples and confirmed safe because `fm-id-dup` already requires globally unique
+    numbers across every scanned subdirectory.
+  - `check_layer` asserts `stage == "declarations"` for now, so a future call with `stage="final"`
+    (0005) fails loudly instead of silently running incomplete rule-9 logic.
+- **Tests**: `tests/test_budget.py` gained 28 tests (strict-YAML per-construct, schema conformance,
+  clusters/cycles, `check_layer` end-to-end, the worked example, the over-budget warning wording);
+  `tests/test_cli.py` gained 8 (disabled/missing-file/wrong-type/pass/warn/fail, each through the
+  real CLI); `tests/test_core.py` gained 1 (`decision_items` directly). Full suite: 181 passing (153
+  before this design).
+
+No divergence from the plan as written; `word_count`, the Complexity box, render, scaffold, and the
+layer inside `terrastep check` are still 0005's, untouched here.

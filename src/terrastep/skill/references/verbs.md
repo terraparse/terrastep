@@ -13,7 +13,7 @@
 | `terrastep migrate` | propose or apply frontmatter for documents that have none | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep install-hooks` | write the git pre-commit hook | `-h`: show this help message and exit; `--force`: overwrite an existing hook; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep skill` | build (maintainer) or install the bundled Claude Code skill | `-h`: show this help message and exit; `--force`: overwrite an existing installed skill; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
-| `terrastep design` | brain budget: budget (see also: precheck, render, scaffold, added by later designs) | `-h`: show this help message and exit |
+| `terrastep design` | brain budget: budget, precheck (see also: render, scaffold, added by 0005) | `-h`: show this help message and exit |
 | `terrastep hook` | run an installed hook (called by the shim) | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 
 ### `terrastep.toml`

@@ -49,3 +49,13 @@
 | `gate-open-blocker` | status is ready or in-progress but a blocker is still [open]. |
 | `body-history` | status is implemented but no section records what was built. |
 | `stale-index` | The index file is missing or doesn't match the current frontmatter. |
+| `brain-budget-ledger-missing` | A design in planning or ready has no brain_budget mapping while brain budget is enabled. |
+| `brain-budget-yaml-strict` | brain_budget has a duplicate key, an anchor, alias or merge key, a custom tag, or a value that is not a JSON type (for example an unquoted date). |
+| `brain-budget-schema-version` | schema_version does not match this terrastep's brain budget format. Run `terrastep design render`. |
+| `brain-budget-schema` | brain_budget does not match the ledger schema. |
+| `brain-budget-policy-id` | policy_id does not match the limits in terrastep.toml. Run `terrastep design render`, then check again. |
+| `brain-budget-edge` | An edge names an evaluation element that is not in the body, joins an evaluation element to itself, or repeats a relationship that is already declared. |
+| `brain-budget-cycle` | Sequencing edges form a cycle after coupled evaluation elements are grouped. |
+| `brain-budget-prereq` | A depends_on entry names a file that is not a scanned design document, names this file, or repeats another entry. |
+| `brain-budget-prereq-cycle` | Designs depend on each other in a cycle. |
+| `brain-budget-draft-marker` | A scaffold draft marker is still present. |

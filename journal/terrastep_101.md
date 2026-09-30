@@ -59,6 +59,16 @@ Only `design` documents get the body-shape check (`legacy` and `note` are exempt
 | `gate-open-blocker` | status is ready or in-progress but a blocker is still [open]. |
 | `body-history` | status is implemented but no section records what was built. |
 | `stale-index` | The index file is missing or doesn't match the current frontmatter. |
+| `brain-budget-ledger-missing` | A design in planning or ready has no brain_budget mapping while brain budget is enabled. |
+| `brain-budget-yaml-strict` | brain_budget has a duplicate key, an anchor, alias or merge key, a custom tag, or a value that is not a JSON type (for example an unquoted date). |
+| `brain-budget-schema-version` | schema_version does not match this terrastep's brain budget format. Run `terrastep design render`. |
+| `brain-budget-schema` | brain_budget does not match the ledger schema. |
+| `brain-budget-policy-id` | policy_id does not match the limits in terrastep.toml. Run `terrastep design render`, then check again. |
+| `brain-budget-edge` | An edge names an evaluation element that is not in the body, joins an evaluation element to itself, or repeats a relationship that is already declared. |
+| `brain-budget-cycle` | Sequencing edges form a cycle after coupled evaluation elements are grouped. |
+| `brain-budget-prereq` | A depends_on entry names a file that is not a scanned design document, names this file, or repeats another entry. |
+| `brain-budget-prereq-cycle` | Designs depend on each other in a cycle. |
+| `brain-budget-draft-marker` | A scaffold draft marker is still present. |
 
 ## 2. The tools
 
@@ -73,7 +83,7 @@ One installed command, `terrastep`:
 | `terrastep migrate` | propose or apply frontmatter for documents that have none | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep install-hooks` | write the git pre-commit hook | `-h`: show this help message and exit; `--force`: overwrite an existing hook; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep skill` | build (maintainer) or install the bundled Claude Code skill | `-h`: show this help message and exit; `--force`: overwrite an existing installed skill; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
-| `terrastep design` | brain budget: budget (see also: precheck, render, scaffold, added by later designs) | `-h`: show this help message and exit |
+| `terrastep design` | brain budget: budget, precheck (see also: render, scaffold, added by 0005) | `-h`: show this help message and exit |
 | `terrastep hook` | run an installed hook (called by the shim) | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 
 Every verb takes `--root DIR` and `--config FILE`; both default to auto-detection (nearest parent holding `terrastep.toml`, then the git root, then the current directory).

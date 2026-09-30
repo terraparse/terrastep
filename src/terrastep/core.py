@@ -53,6 +53,27 @@ FAILURE_CODES: dict[str, str] = {
     "gate-open-blocker": "status is ready or in-progress but a blocker is still [open].",
     "body-history": "status is implemented but no section records what was built.",
     "stale-index": "The index file is missing or doesn't match the current frontmatter.",
+    # Brain budget layer (0004), the declarations stage. 0005 adds
+    # brain-budget-complexity (the Complexity box, final stage only).
+    "brain-budget-ledger-missing": "A design in planning or ready has no brain_budget mapping "
+                                   "while brain budget is enabled.",
+    "brain-budget-yaml-strict": "brain_budget has a duplicate key, an anchor, alias or merge "
+                                "key, a custom tag, or a value that is not a JSON type (for "
+                                "example an unquoted date).",
+    "brain-budget-schema-version": "schema_version does not match this terrastep's brain "
+                                   "budget format. Run `terrastep design render`.",
+    "brain-budget-schema": "brain_budget does not match the ledger schema.",
+    "brain-budget-policy-id": "policy_id does not match the limits in terrastep.toml. Run "
+                              "`terrastep design render`, then check again.",
+    "brain-budget-edge": "An edge names an evaluation element that is not in the body, joins "
+                        "an evaluation element to itself, or repeats a relationship that is "
+                        "already declared.",
+    "brain-budget-cycle": "Sequencing edges form a cycle after coupled evaluation elements are "
+                         "grouped.",
+    "brain-budget-prereq": "A depends_on entry names a file that is not a scanned design "
+                          "document, names this file, or repeats another entry.",
+    "brain-budget-prereq-cycle": "Designs depend on each other in a cycle.",
+    "brain-budget-draft-marker": "A scaffold draft marker is still present.",
 }
 
 # Front roles each plan type must have (see "The body" in the design note).
@@ -121,6 +142,12 @@ ID_FILENAME_RE = re.compile(r"^(\d{4})_")
 class Finding:
     code: str
     message: str
+    # Set only by the brain budget layer (0004), for a JSON report's precise
+    # location (e.g. "brain_budget.edges[1].type") and expected/actual values.
+    # Every existing Finding(...) call site is unaffected.
+    path: str | None = None
+    expected: object | None = None
+    actual: object | None = None
 
     def __str__(self) -> str:
         return f"[{self.code}] {self.message}"
@@ -155,6 +182,12 @@ class Doc:
     yaml_error: str | None
     body: str
     sections: list[Section] = field(default_factory=list)
+    # The raw frontmatter YAML text (0004: budget.py's strict loader composes
+    # it), and its character offset in the whole file (0005: `design render`
+    # uses it to translate a yaml.compose() node mark back into a file
+    # position). Empty/0 when there is no frontmatter block at all.
+    fm_text: str = ""
+    fm_offset: int = 0
 
     @property
     def name(self) -> str:
@@ -198,19 +231,22 @@ def is_iso_date(value) -> bool:
     return False
 
 
-def split_frontmatter(text: str) -> tuple[dict | None, str, str | None]:
-    """Return (meta, body, yaml_error). meta is None when there is no block."""
+def split_frontmatter(text: str) -> tuple[dict | None, str, str | None, str, int]:
+    """Return (meta, body, yaml_error, fm_text, fm_offset). meta is None when
+    there is no block. fm_text is the raw YAML between the `---` markers
+    ("" when there is no block); fm_offset is its character offset in `text`."""
     m = FM_RE.match(text)
     if not m:
-        return None, text, None
+        return None, text, None, "", 0
     body = text[m.end():]
+    fm_text, fm_offset = m.group(1), m.start(1)
     try:
-        meta = yaml.safe_load(m.group(1))
+        meta = yaml.safe_load(fm_text)
     except yaml.YAMLError as exc:
-        return {}, body, str(exc).splitlines()[0]
+        return {}, body, str(exc).splitlines()[0], fm_text, fm_offset
     if not isinstance(meta, dict):
-        return {}, body, "frontmatter is not a key: value mapping"
-    return meta, body, None
+        return {}, body, "frontmatter is not a key: value mapping", fm_text, fm_offset
+    return meta, body, None, fm_text, fm_offset
 
 
 def normalize_title(title: str) -> str:
@@ -277,11 +313,29 @@ def parse_items(section: Section) -> list[Item]:
     return items
 
 
+def decision_items(doc: Doc) -> list[Item]:
+    """The blocker/question items check_body counts: parse_items() on each of
+    the first Blockers and Questions sections, keeping only an item whose
+    letter matches its section (a Q in Blockers is `body-items`' problem, not
+    an evaluation element). 0004's measures need this same set, not the raw
+    parse — so this is the one place that decides it, and check_body calls it
+    too, rather than each computing its own version."""
+    dec_idx = {k: [i for i, s in enumerate(doc.sections) if s.kind == k] for k in "BQ"}
+    items: list[Item] = []
+    for k in "BQ":
+        if not dec_idx[k]:
+            continue
+        sec = doc.sections[dec_idx[k][0]]
+        items.extend(i for i in parse_items(sec) if i.letter == k)
+    return items
+
+
 def load_doc(path: Path, root: Path, role_patterns: dict[str, list[re.Pattern]]) -> Doc:
     text = path.read_text(encoding="utf-8")
-    meta, body, yaml_error = split_frontmatter(text)
+    meta, body, yaml_error, fm_text, fm_offset = split_frontmatter(text)
     return Doc(path=path, rel=path.relative_to(root).as_posix(), meta=meta,
-               yaml_error=yaml_error, body=body, sections=parse_sections(body, role_patterns))
+               yaml_error=yaml_error, body=body, sections=parse_sections(body, role_patterns),
+               fm_text=fm_text, fm_offset=fm_offset)
 
 
 def scan_docs(root: Path, config: Config) -> list[Doc]:
@@ -391,7 +445,6 @@ def check_body(doc: Doc, config: Config) -> tuple[list[Finding], list[str]]:
         warns.append(f"unclassified front sections: {unclassified}")
 
     # Blockers and questions: items, tags, recommendations.
-    items: list[Item] = []
     for k in "BQ":
         if not dec_idx[k]:
             continue
@@ -404,7 +457,7 @@ def check_body(doc: Doc, config: Config) -> tuple[list[Finding], list[str]]:
         if not sec_items and not _says_none(sec):
             out.append(Finding("body-empty", f"{DECISION_NAMES[k]} has no {k}1-style items and does not "
                                              f"say 'None' with a reason"))
-        items.extend(sec_items)
+    items = decision_items(doc)
     idents = Counter(i.ident for i in items)
     for ident, n in idents.items():
         if n > 1:

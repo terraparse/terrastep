@@ -1,58 +1,105 @@
 # Sharing terrastep: setup and maintenance
 
-A plain guide, not a proposal: it carries no frontmatter on purpose, because it does not sit in a
+A plain guide, not a plan: it carries no frontmatter on purpose, because it does not sit in a
 designated `scan_dirs` directory (same reasoning as `terrastep_101.md`). It assumes you've read
 that doc; this one is about getting terrastep *to* a project and keeping it current there, not
 what terrastep checks once it's there.
 
-## 1. Getting terrastep ready for easy project-by-project installation
+**Updated 2026-09-30** for the actual near-term need: sharing terrastep with other repositories
+you develop with Claude Code, most of which sit on this same machine
+(`/home/jga/dev/3p/atomicalc`, `ebow`, `perry-web`, `tmdc-web` today). That need does not require
+GitHub, a public repository, or PyPI — pip installs directly from a local directory, no network
+involved. Verified today: both a regular and an editable local install expose the `terrastep`
+command and correctly locate the bundled skill (`terrastep skill install` copies it out), with
+`git remote -v` still empty.
 
-This section is a checklist; items are marked done as they happen, not all done up front.
+## The three ways to share it, and which to use
 
-1. **Add a `LICENSE` file. Done (2026-09-28), MIT.** `pip` and GitHub both read it; without it,
-   the terms anyone installing terrastep is operating under are undefined.
-2. **Add license/author metadata to `pyproject.toml`. Done (2026-09-28)**: `license = {file =
-   "LICENSE"}`, `authors`, and an OSI classifier. Still open: a `[project.urls]` table
-   (`Repository`, maybe `Issues`) — needs (3) to exist first, so there's a URL to point at.
-3. **Push this repository to a public GitHub remote.** Today `git remote -v` is empty — this repo
-   has never been pushed anywhere. Once it has a remote:
-   ```
-   pip install git+https://github.com/<you>/terrastep.git
-   ```
-   works from any machine, no auth, no cloning by hand — this alone satisfies "easy
-   project-by-project installation" for anyone who already has your URL.
-4. **Optional, but worth it for "easy"**: publish to PyPI. `pip install terrastep` (no URL, no
-   `git+`, and `pip install --upgrade terrastep` for updates) is a meaningfully lower-friction
-   experience than a git URL, and is what most people expect. Needs: (1) and (2) done first, a
-   PyPI account, `python -m build` (produces `dist/*.whl` and `dist/*.tar.gz`), then
-   `twine upload dist/*`. A name squat check on PyPI for `terrastep` is worth doing before
-   committing to the name publicly. This is a bigger step than (3) — a published package name is
-   hard to walk back — so treat it as a separate decision, not a default.
-5. **Decide the version-tag convention** before the first real release, not after. Recommended,
-   absent a stronger reason: [SemVer](https://semver.org/) — a MAJOR bump for any change that could
-   make an already-passing document start failing `terrastep check` (a new required field, a
-   stricter rule), MINOR for a new verb or config key that doesn't change existing behavior, PATCH
-   for a bug fix. `terrastep` has no automated migration between versions yet (0001, "What this
-   does not do") — a MAJOR bump is exactly the kind of change that would need a hand-written note
-   like the Perry handoff (`journal/perry_terraparse_handoff.md`-style) until that tooling exists.
-6. **Tag releases in git**: `git tag vX.Y.Z && git push --tags`, once (3) is done. Lets a consumer
-   pin `pip install git+https://github.com/<you>/terrastep.git@v0.1.0` instead of always floating
-   on the tip of `main`.
+| Method | Needs | Best for |
+|---|---|---|
+| **A. Local path** | Nothing beyond this checkout. | Repos on this machine — the actual case today. |
+| **B. A git remote** | A GitHub repo, public or private. | A repo on another machine, or another person. |
+| **C. PyPI** | (A) or (B) already done, a PyPI account. | Convenience once/if this is ever public. |
 
-None of steps 3-6 are reversible the same way a local commit is (a public push, a published
-package name, a pushed tag are all visible to others once done) — confirm before running them, not
-after.
+None of these are mutually exclusive, and none is a prerequisite for another. Start with A; move
+to B only when a repository genuinely isn't on this filesystem; C is a later, separate decision
+(a published package name is hard to walk back — see its own note below).
 
-## 2. Adopting terrastep in a new repository (once 1 is done)
+### A. Local path (recommended today)
 
-This is the sequence for a consumer — could be you, in a different project, or someone else
-entirely:
+No setup. From any other repo's own virtualenv:
 
 ```
-pip install terrastep                      # or: pip install git+https://github.com/<you>/terrastep.git
+pip install /home/jga/dev/3p/terrastep              # a stable snapshot
+# or
+pip install -e /home/jga/dev/3p/terrastep           # a live link to this working tree
 ```
 
-Then, at that repo's root:
+Both were verified to work end to end just now: `terrastep skill install`, `terrastep build`,
+`terrastep check` all ran correctly against a fresh scratch repo, from each install.
+
+**Regular vs. editable:** a regular install copies the package at install time; the consumer
+repo's `terrastep` is frozen until someone reinstalls it. An editable install (`-e`) links back
+to *this* checkout — the next time that repo runs `terrastep`, it runs whatever is on disk here
+right now, no reinstall step. While terrastep is still changing every session (0001 through
+0007 so far), editable is the lower-friction choice for your own repos; use a regular install
+only where you want a pinned, won't-move-under-me copy.
+
+**What does not change, either way:** `terrastep skill install` always *copies* the bundled skill
+into the consumer repo's `.claude/skills/terrastep/` — even under an editable install. A later
+change to the skill's content still needs `terrastep skill install --force` run again in that
+repo. Only the CLI's behavior is live-linked by `-e`; the installed skill snapshot is not.
+
+**No version pinning is possible this way** — a local path always means "whatever is on disk right
+now." If a consumer needs to freeze to a specific point, tag a commit here (`git tag vX.Y.Z`) as a
+record, but there is nothing to `pip install` against a local tag; that pinning only exists once
+there's a remote (B) to check the tag out from, or a built wheel copied over by hand.
+
+### B. A git remote
+
+Needed only once a repository you want to share with is not reachable from this filesystem. The
+remote does **not** need to be public:
+
+```
+pip install git+https://github.com/<you>/terrastep.git            # public repo, or private with a token
+pip install git+ssh://git@github.com/<you>/terrastep.git          # private repo, SSH key auth
+```
+
+Checklist, done once:
+
+1. **License file and metadata. Done (2026-09-28).** MIT, `LICENSE`, and `pyproject.toml`'s
+   `license`/`authors`/classifier. Needed regardless of public or private — without it, the terms
+   anyone installing terrastep operates under are undefined.
+2. **Push to a GitHub remote.** `git remote -v` is empty today. Nothing else here works until a
+   remote exists. A private repository is a completely adequate choice for "share with my other
+   repos, or a collaborator" — it costs only that the puller needs read access (an SSH key
+   registered with GitHub, or a personal access token). Going public is a separate, later decision
+   (see C); nothing here requires it.
+3. **Decide the version-tag convention** before the first tag, not after. Recommended, absent a
+   stronger reason: [SemVer](https://semver.org/) — MAJOR for a change that could make an
+   already-passing document start failing `terrastep check`, MINOR for a new verb or config key
+   that doesn't change existing behavior, PATCH for a bug fix. terrastep has no automated migration
+   between versions yet (0001, "What this does not do") — a MAJOR bump needs a hand-written
+   migration note per consumer (the shape of `journal/origin/handoff.md`) until that tooling
+   exists.
+4. **Tag releases**: `git tag vX.Y.Z && git push --tags`. Lets a consumer pin
+   `pip install git+https://github.com/<you>/terrastep.git@v0.1.0` instead of floating on `main`.
+
+A public push, and a pushed tag, are visible to whoever can already see the repository once done
+— for a private repo that's only its collaborators; confirm before running either regardless.
+
+### C. PyPI (optional, a separate decision)
+
+`pip install terrastep` (no URL, no `git+`) is lower-friction than either A or B, and is what most
+people expect of a real package name — but treat it as separate from "share it with my other
+projects," which A already solves completely. Needs: (B) already done, a PyPI account,
+`python -m build` (produces `dist/*.whl` and `dist/*.tar.gz`), then `twine upload dist/*`. A name
+squat check on PyPI for `terrastep` is worth doing before committing to the name publicly — a
+published package name is hard to walk back.
+
+## Adopting terrastep in a new repository
+
+However the package got installed (A, B, or C), the sequence at that repo's root is the same:
 
 1. Write a `terrastep.toml` naming `scan_dirs` (see `terrastep_101.md`'s Config table for every key).
 2. If there's existing undocumented markdown to bring under the format:
@@ -70,7 +117,7 @@ Every step here is already covered, in more depth, by `terrastep_101.md`'s "How 
 start to finish, in one place, rather than assuming someone stitches it together from two other
 docs.
 
-## 3. Maintaining terrastep as the codebase changes and new versions ship
+## Maintaining terrastep as the codebase changes and new versions ship
 
 A release is not just "bump the version number." In order:
 
@@ -78,9 +125,12 @@ A release is not just "bump the version number." In order:
    passing.
 2. **Bump `terrastep.__version__`** in `src/terrastep/__init__.py` — the single source of truth
    (`pyproject.toml` reads it dynamically; see `CLAUDE.md`'s "Versioning and the generated
-   docs/skill"). Decide the bump size using the SemVer convention from section 1, step 5.
-3. **Regenerate the generated docs and skill**: `venv/bin/terrastep skill build`. This is not
-   optional and not separable from step 2 — every generated file (`journal/terrastep_101.md`,
+   docs/skill"). Decide the bump size using the SemVer convention above. Skip this step entirely
+   for changes shared only via method A to your own other repos — there is no consumer whose
+   already-passing check a local, unversioned change could silently break without you noticing,
+   since it's the same person running both sides. Do bump before tagging (B) or publishing (C).
+3. **Regenerate the generated docs and skill**: `venv/bin/terrastep skill build`. Not optional and
+   not separable from step 2 — every generated file (`journal/terrastep_101.md`,
    `src/terrastep/skill/**`) stamps the version that produced it, so a version bump is a content
    change to all of them. `CLAUDE.md` already says this; repeated here because it's the step most
    likely to be forgotten under release pressure.
@@ -92,29 +142,39 @@ A release is not just "bump the version number." In order:
    terrastep's own journal failing its own check.
 7. **Commit the version bump and the regenerated files together**, one commit — they're one
    logical change, not two.
-8. **Tag and push** (`git tag vX.Y.Z && git push --tags`), once section 1's steps 3 and 6 are done.
+8. **Tag and push** (`git tag vX.Y.Z && git push --tags`), once method B is set up and you want one.
 9. **If published to PyPI**: `python -m build`, `twine upload dist/*`.
 
 ### What a consumer does after a new version ships
 
-- `pip install --upgrade terrastep` (or re-pin the git tag).
-- **Re-run `terrastep skill install --root . --force`** in every repo that has the skill installed.
-  Nothing pushes an update to an already-installed skill automatically — `.claude/skills/terrastep/`
-  is a snapshot from whenever it was last installed, not a live link to the package. The
+- **Method A, editable install:** nothing for the CLI — it already runs this checkout's latest
+  code. Still re-run `terrastep skill install --root . --force` in every consumer repo if the
+  change touched the skill (`skilldoc.py`, `core.py`'s rules, `config.py`'s keys) — that copy
+  never updates on its own.
+- **Method A, regular install:** `pip install --force-reinstall /home/jga/dev/3p/terrastep`, then
+  the same skill-install refresh if needed.
+- **Method B or C:** `pip install --upgrade terrastep` (or re-pin the git tag), then the same
+  skill-install refresh.
+- In every case: nothing pushes an update to an already-installed skill automatically —
+  `.claude/skills/terrastep/` is a snapshot from whenever it was last installed, not a live link
+  to the package (not even under an editable install — see method A above). The
   `terrastep_version:` field in that repo's `SKILL.md` frontmatter is how you'd notice it's stale
   (by comparing it to `terrastep.__version__` in the newly installed package) — there is no
   automated check for this yet (Q5, 0002: recording the version was in scope; detecting a mismatch
   was explicitly deferred).
 - `terrastep build && terrastep check` — confirm the upgrade didn't newly fail anything. A MAJOR
-  version bump is exactly the case where it might; there's no migration tool yet (see section 1,
-  step 5), so a failure here means reading the release's notes and fixing documents by hand.
+  version bump is exactly the case where it might; there's no migration tool yet, so a failure
+  here means reading the release's notes and fixing documents by hand.
 
-### What this guide does not solve
+## What this guide does not solve
 
 - **No automated version-mismatch detection** between an installed skill and the `terrastep`
   package that's actually running (0002, Q5). The version is recorded; nothing reads it back yet.
 - **No automated migration between terrastep versions** (0001, "What this does not do"). A
-  breaking rule change needs a hand-written migration note per consumer, the same shape as the
-  Perry handoff, until that tooling exists.
-- **No CI.** Every check in section 3 above is run by hand, by whoever is doing the release. There
-  is no automated release pipeline yet.
+  breaking rule change needs a hand-written migration note per consumer, the same shape as
+  `journal/origin/handoff.md`, until that tooling exists.
+- **No CI.** Every check in "Maintaining terrastep" above is run by hand, by whoever is doing the
+  release. There is no automated release pipeline yet.
+- **No dependency on this document for private, same-machine use.** If you only ever need method
+  A, you can skip straight to "Adopting terrastep in a new repository" — everything above it in
+  this file is about the day a repository stops being on this filesystem.

@@ -2,7 +2,7 @@
 
 # brain budget reference
 
-An optional layer on `type: design` documents, off by default (`[brain_budget] enabled = false`). See `SKILL.md`'s "Writing design documents under a brain budget" for the procedure, and `references/verbs.md` for every `terrastep design` verb.
+An optional layer on `type: plan` documents, off by default (`[brain_budget] enabled = false`). See `SKILL.md`'s "Writing plan documents under a brain budget" for the procedure, and `references/verbs.md` for every `terrastep plan` verb.
 
 ### The four measures
 
@@ -113,7 +113,7 @@ An optional layer on `type: design` documents, off by default (`[brain_budget] e
 
 ### Declaring edges and prerequisites
 
-An edge is a direct constraint between two evaluation elements in the same design: the answer to
+An edge is a direct constraint between two evaluation elements in the same plan: the answer to
 one changes the possible answers, required behavior, or acceptance criteria of the other. Two
 elements about the same topic do not need an edge for that reason alone.
 
@@ -129,33 +129,33 @@ constraint in `contract`. If no, declare nothing.
   just because that path exists.
 - One record per pair. A `coupled` relationship replaces a `sequencing` record for the same pair.
 
-A prerequisite (`depends_on`) means this design cannot deliver its behavior until another design
-supplies a specific interface, invariant or capability — not that the other design merely comes
-earlier or covers a related feature. If this design's choices could invalidate the other design's
-contract, the elements are coupled, not sequenced: put them in one design instead.
+A prerequisite (`depends_on`) means this plan cannot deliver its behavior until another plan
+supplies a specific interface, invariant or capability — not that the other plan merely comes
+earlier or covers a related feature. If this plan's choices could invalidate the other plan's
+contract, the elements are coupled, not sequenced: put them in one plan instead.
 
 ### Failure codes
 
 | Code | Meaning |
 |---|---|
-| `brain-budget-ledger-missing` | A design in planning or ready has no brain_budget mapping while brain budget is enabled. |
+| `brain-budget-ledger-missing` | A plan in planning or ready has no brain_budget mapping while brain budget is enabled. |
 | `brain-budget-yaml-strict` | brain_budget has a duplicate key, an anchor, alias or merge key, a custom tag, or a value that is not a JSON type (for example an unquoted date). |
-| `brain-budget-schema-version` | schema_version does not match this terrastep's brain budget format. Run `terrastep design render`. |
+| `brain-budget-schema-version` | schema_version does not match this terrastep's brain budget format. Run `terrastep plan render`. |
 | `brain-budget-schema` | brain_budget does not match the ledger schema. |
-| `brain-budget-policy-id` | policy_id does not match the limits in terrastep.toml. Run `terrastep design render`, then check again. |
+| `brain-budget-policy-id` | policy_id does not match the limits in terrastep.toml. Run `terrastep plan render`, then check again. |
 | `brain-budget-edge` | An edge names an evaluation element that is not in the body, joins an evaluation element to itself, or repeats a relationship that is already declared. |
 | `brain-budget-cycle` | Sequencing edges form a cycle after coupled evaluation elements are grouped. |
-| `brain-budget-prereq` | A depends_on entry names a file that is not a scanned design document, names this file, or repeats another entry. |
-| `brain-budget-prereq-cycle` | Designs depend on each other in a cycle. |
+| `brain-budget-prereq` | A depends_on entry names a file that is not a scanned plan document, names this file, or repeats another entry. |
+| `brain-budget-prereq-cycle` | Plans depend on each other in a cycle. |
 | `brain-budget-draft-marker` | A scaffold draft marker is still present. |
-| `brain-budget-complexity` | The Complexity box is missing, not placed just before Blockers, or not what `terrastep design render` would write. |
+| `brain-budget-complexity` | The Complexity box is missing, not placed just before Blockers, or not what `terrastep plan render` would write. |
 
 ### Configuration
 
 | Key | Default | Meaning |
 |---|---|---|
-| `[brain_budget] enabled` | `False` | Turns on the brain budget layer for type: design documents. |
-| `[brain_budget] max_retries` | `2` | Retries per design, shared between precheck and check, for fixing failures and for trying a different split to fit the budget. |
+| `[brain_budget] enabled` | `False` | Turns on the brain budget layer for type: plan documents. |
+| `[brain_budget] max_retries` | `2` | Retries per plan, shared between precheck and check, for fixing failures and for trying a different split to fit the budget. |
 | `[brain_budget.limits] evaluative_count` | `10` | Blocker and question evaluation elements in the document, open or resolved. |
 | `[brain_budget.limits] dependency_edge_count` | `11` | Edges plus depends_on entries. |
 | `[brain_budget.limits] largest_coupled_cluster_size` | `3` | Evaluation elements in the largest coupled cluster. |

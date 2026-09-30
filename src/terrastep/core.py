@@ -21,7 +21,7 @@ from .config import Config
 STATES = ("planning", "ready", "in-progress", "implemented", "closed")
 # A note is not a proposal, so it is never planned, approved or shipped.
 NOTE_STATES = ("in-progress", "closed")
-PLAN_TYPES = ("design",)
+PLAN_TYPES = ("plan",)
 TYPES = PLAN_TYPES + ("legacy", "note")
 CLOSED_REASONS = ("superseded", "rejected", "withdrawn", "reference")
 
@@ -55,37 +55,40 @@ FAILURE_CODES: dict[str, str] = {
     "stale-index": "The index file is missing or doesn't match the current frontmatter.",
     # Brain budget layer (0004), the declarations stage. 0005 adds
     # brain-budget-complexity (the Complexity box, final stage only).
-    "brain-budget-ledger-missing": "A design in planning or ready has no brain_budget mapping "
+    "brain-budget-ledger-missing": "A plan in planning or ready has no brain_budget mapping "
                                    "while brain budget is enabled.",
     "brain-budget-yaml-strict": "brain_budget has a duplicate key, an anchor, alias or merge "
                                 "key, a custom tag, or a value that is not a JSON type (for "
                                 "example an unquoted date).",
     "brain-budget-schema-version": "schema_version does not match this terrastep's brain "
-                                   "budget format. Run `terrastep design render`.",
+                                   "budget format. Run `terrastep plan render`.",
     "brain-budget-schema": "brain_budget does not match the ledger schema.",
     "brain-budget-policy-id": "policy_id does not match the limits in terrastep.toml. Run "
-                              "`terrastep design render`, then check again.",
+                              "`terrastep plan render`, then check again.",
     "brain-budget-edge": "An edge names an evaluation element that is not in the body, joins "
                         "an evaluation element to itself, or repeats a relationship that is "
                         "already declared.",
     "brain-budget-cycle": "Sequencing edges form a cycle after coupled evaluation elements are "
                          "grouped.",
-    "brain-budget-prereq": "A depends_on entry names a file that is not a scanned design "
+    "brain-budget-prereq": "A depends_on entry names a file that is not a scanned plan "
                           "document, names this file, or repeats another entry.",
-    "brain-budget-prereq-cycle": "Designs depend on each other in a cycle.",
+    "brain-budget-prereq-cycle": "Plans depend on each other in a cycle.",
     "brain-budget-draft-marker": "A scaffold draft marker is still present.",
     "brain-budget-complexity": "The Complexity box is missing, not placed just before Blockers, "
-                              "or not what `terrastep design render` would write.",
+                              "or not what `terrastep plan render` would write.",
 }
 
-# Front roles each plan type must have (see "The body" in the design note).
+# Front roles each plan type must have (see "The body" in the plan note).
 # Each entry is an any-of group: one non-empty section in the group satisfies it.
 REQUIRED_ROLES = {
-    "design": (("summary", "motivation"),),
+    "plan": (("summary", "motivation"),),
 }
 # Roles a type should have. A missing one warns; it never fails.
+# The "design" entry here is a role name (the front section describing the
+# solution's shape, e.g. "## Design"/"## Solution"), unrelated to the "plan"
+# key (the document type) — see 0007, Q7.
 EXPECTED_ROLES = {
-    "design": ("design", "scope"),
+    "plan": ("design", "scope"),
 }
 
 # Alias table: normalized heading text -> role. Prefix match. A repo's
@@ -115,7 +118,7 @@ ROLE_ALIASES: dict[str, tuple[str, ...]] = {
         r"what was built", r"implementation (?:record|history)",
         r"execution note",
     ),
-    # Tool-owned (0005): only `terrastep design render` writes this section.
+    # Tool-owned (0005): only `terrastep plan render` writes this section.
     "complexity": (r"complexity",),
 }
 
@@ -187,7 +190,7 @@ class Doc:
     body: str
     sections: list[Section] = field(default_factory=list)
     # The raw frontmatter YAML text (0004: budget.py's strict loader composes
-    # it), and its character offset in the whole file (0005: `design render`
+    # it), and its character offset in the whole file (0005: `plan render`
     # uses it to translate a yaml.compose() node mark back into a file
     # position). Empty/0 when there is no frontmatter block at all.
     fm_text: str = ""
@@ -515,9 +518,9 @@ def check_doc(doc: Doc, names: set[str], id_counts: Counter, config: Config,
         body_findings, warns = check_body(doc, config)
         findings.extend(body_findings)
         # The brain budget layer, final stage (0005): only a planning/ready
-        # design, only when the repository opted in, and only when the
+        # plan, only when the repository opted in, and only when the
         # caller supplied the whole corpus (the prerequisite-cycle rule
-        # needs every scanned design, not just this file).
+        # needs every scanned plan, not just this file).
         if (config.brain_budget.enabled and doc.status in ("planning", "ready")
                 and corpus is not None):
             from . import budget as budget_mod  # deferred: budget.py imports core
@@ -592,7 +595,7 @@ def next_id(docs: list[Doc], config: Config) -> int:
 def render_status(docs: list[Doc], config: Config, corpus: dict[str, Doc] | None = None) -> str:
     """The text of the index file. Deterministic: no timestamp. `corpus`
     (filename -> Doc) is what the "In budget" column (0005) measures each
-    design against; it defaults to one built from `docs` itself, so every
+    plan against; it defaults to one built from `docs` itself, so every
     existing caller that passes only (docs, config) is unaffected."""
     from . import budget as budget_mod  # deferred: budget.py imports core
     if corpus is None:

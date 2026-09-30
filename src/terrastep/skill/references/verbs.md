@@ -13,10 +13,10 @@
 | `terrastep migrate` | propose or apply frontmatter for documents that have none | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep install-hooks` | write the git pre-commit hook | `-h`: show this help message and exit; `--force`: overwrite an existing hook; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep skill` | build (maintainer) or install the bundled Claude Code skill | `-h`: show this help message and exit; `--force`: overwrite an existing installed skill; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
-| `terrastep design budget` | show whether brain budget is enabled and its effective limits | `-h`: show this help message and exit; `--format`: output format; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
-| `terrastep design precheck` | the declarations stage: ledger, edges, evaluation elements, structural measures | `-h`: show this help message and exit; `--format`: output format; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
-| `terrastep design render` | write the tool-owned stamps and Complexity box | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
-| `terrastep design scaffold` | create a new design skeleton with the next free number | `-h`: show this help message and exit; `--title`: the design's title (the H1); `--slug`: default: derived from --title; `--dir`: default: scan_dirs[0]; `--depends-on`: a prerequisite design's filename; may repeat; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
+| `terrastep plan budget` | show whether brain budget is enabled and its effective limits | `-h`: show this help message and exit; `--format`: output format; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
+| `terrastep plan precheck` | the declarations stage: ledger, edges, evaluation elements, structural measures | `-h`: show this help message and exit; `--format`: output format; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
+| `terrastep plan render` | write the tool-owned stamps and Complexity box | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
+| `terrastep plan scaffold` | create a new plan skeleton with the next free number | `-h`: show this help message and exit; `--title`: the plan's title (the H1); `--slug`: default: derived from --title; `--dir`: default: scan_dirs[0]; `--depends-on`: a prerequisite plan's filename; may repeat; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep hook` | run an installed hook (called by the shim) | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 
 ### `terrastep.toml`
@@ -26,14 +26,14 @@
 | `scan_dirs` | `['journal']` | The designated directories, and only them. A list, scanned recursively (so version subdirectories are included). A markdown file outside every entry is invisible to terrastep. |
 | `index_file` | `'STATUS.md'` | The generated index's filename. Always excluded from the scan. Written inside scan_dirs[0]. |
 | `exclude` | `['CHANGELOG.md']` | Extra filenames to skip, on top of index_file. |
-| `id_floor` | `0` | The next design document's number is floor + 1. |
+| `id_floor` | `0` | The next plan document's number is floor + 1. |
 | `in_progress_cap` | `3` | Warning only: more than this many in-progress documents at once. |
 | `[aliases]` | (none) | Adds heading patterns to a role; never removes a built-in one. |
 | `warn_bare_section` | `False` | Warn on a `§N` reference with no document named alongside it. |
 | `[migrate] changelog` | (none) | A changelog file: a document it links is proposed as already finished, dated by that line. |
-| `[migrate] plan_dir` | (none) | A directory whose documents default to type: legacy during `migrate propose`. |
-| `[brain_budget] enabled` | `False` | Turns on the brain budget layer for type: design documents. |
-| `[brain_budget] max_retries` | `2` | Retries per design, shared between precheck and check, for fixing failures and for trying a different split to fit the budget. |
+| `[migrate] legacy_dir` | (none) | A directory whose documents default to type: legacy during `migrate propose`. |
+| `[brain_budget] enabled` | `False` | Turns on the brain budget layer for type: plan documents. |
+| `[brain_budget] max_retries` | `2` | Retries per plan, shared between precheck and check, for fixing failures and for trying a different split to fit the budget. |
 | `[brain_budget.limits] evaluative_count` | `10` | Blocker and question evaluation elements in the document, open or resolved. |
 | `[brain_budget.limits] dependency_edge_count` | `11` | Edges plus depends_on entries. |
 | `[brain_budget.limits] largest_coupled_cluster_size` | `3` | Evaluation elements in the largest coupled cluster. |

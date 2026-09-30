@@ -1,7 +1,7 @@
 ---
 status: implemented
 status_changed: 2026-09-29
-type: design
+type: plan
 next: "None. Sequencing steps 1-4 are done (see \"What was built\" below). The pilot (step 5) was
   dropped by the owner as too much work for too little value."
 ---

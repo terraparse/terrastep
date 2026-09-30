@@ -44,16 +44,16 @@ CONFIG_HELP: dict[str, str] = {
     "index_file": "The generated index's filename. Always excluded from the scan. Written "
                   "inside scan_dirs[0].",
     "exclude": "Extra filenames to skip, on top of index_file.",
-    "id_floor": "The next design document's number is floor + 1.",
+    "id_floor": "The next plan document's number is floor + 1.",
     "in_progress_cap": "Warning only: more than this many in-progress documents at once.",
     "aliases": "Adds heading patterns to a role; never removes a built-in one.",
     "warn_bare_section": "Warn on a `§N` reference with no document named alongside it.",
     "migrate.changelog": "A changelog file: a document it links is proposed as already "
                          "finished, dated by that line.",
-    "migrate.plan_dir": "A directory whose documents default to type: legacy during "
+    "migrate.legacy_dir": "A directory whose documents default to type: legacy during "
                         "`migrate propose`.",
-    "brain_budget.enabled": "Turns on the brain budget layer for type: design documents.",
-    "brain_budget.max_retries": "Retries per design, shared between precheck and check, for "
+    "brain_budget.enabled": "Turns on the brain budget layer for type: plan documents.",
+    "brain_budget.max_retries": "Retries per plan, shared between precheck and check, for "
                                 "fixing failures and for trying a different split to fit the "
                                 "budget.",
     "brain_budget.limits.evaluative_count": "Blocker and question evaluation elements in the "
@@ -69,7 +69,7 @@ CONFIG_HELP: dict[str, str] = {
 @dataclass(frozen=True)
 class MigrateConfig:
     changelog: str | None = None
-    plan_dir: str | None = None
+    legacy_dir: str | None = None
 
 
 @dataclass(frozen=True)
@@ -87,7 +87,7 @@ class BrainBudgetConfig:
     max_retries: int = 2
     limits: BudgetLimits = field(default_factory=BudgetLimits)
     # Which BUDGET_LIMIT_KEYS terrastep.toml actually set, so a caller (e.g.
-    # `terrastep design budget`) can mark the rest as defaults.
+    # `terrastep plan budget`) can mark the rest as defaults.
     limits_in_file: frozenset[str] = frozenset()
 
 
@@ -190,6 +190,7 @@ def load(root: Path, config_file: Path | None = None) -> Config:
         in_progress_cap=data.get("in_progress_cap", DEFAULT_IN_PROGRESS_CAP),
         aliases={k: tuple(v) for k, v in data.get("aliases", {}).items()},
         warn_bare_section=data.get("warn_bare_section", False),
-        migrate=MigrateConfig(changelog=migrate_data.get("changelog"), plan_dir=migrate_data.get("plan_dir")),
+        migrate=MigrateConfig(changelog=migrate_data.get("changelog"),
+                             legacy_dir=migrate_data.get("legacy_dir")),
         brain_budget=_load_brain_budget(data),
     )

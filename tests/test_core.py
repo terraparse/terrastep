@@ -95,7 +95,8 @@ MUTATIONS = [
     # id, baseline, mutate(text) -> text, expected codes
     ("fm-missing", DESIGN, lambda t: t.split("---\n", 2)[2], {"fm-missing"}),
     ("fm-yaml", DESIGN, lambda t: replace_once(t, "next: Owner reviews.", "next: one: two"), {"fm-yaml"}),
-    ("fm-type", DESIGN, lambda t: replace_once(t, "type: design", "type: plan"), {"fm-type"}),
+    # "design" was terrastep's type value before 0007; it is now itself invalid.
+    ("fm-type", DESIGN, lambda t: replace_once(t, "type: plan", "type: design"), {"fm-type"}),
     ("fm-status", DESIGN, lambda t: replace_once(t, "status: planning", "status: wip"), {"fm-status"}),
     ("fm-status: idea is not a state", DESIGN, lambda t: replace_once(t, "status: planning", "status: idea"),
      {"fm-status"}),
@@ -103,7 +104,7 @@ MUTATIONS = [
      {"fm-date"}),
     ("fm-closed-reason", DESIGN, lambda t: replace_once(t, "status: planning", "status: closed"),
      {"fm-closed-reason"}),
-    ("fm-link", DESIGN, lambda t: replace_once(t, "type: design", "type: design\nblocked_by: nonexistent.md"),
+    ("fm-link", DESIGN, lambda t: replace_once(t, "type: plan", "type: plan\nblocked_by: nonexistent.md"),
      {"fm-link"}),
     ("body-roles: design has neither summary nor motivation", DESIGN,
      lambda t: drop_section(drop_section(t, "What this is"), "Why, in the terms"), {"body-roles"}),
@@ -240,7 +241,7 @@ def test_legacy_and_note_may_carry_a_number(tmp_path):
 
 
 def test_blocked_by_resolves_against_any_scanned_file(tmp_path):
-    files = {DESIGN: replace_once(text_of(DESIGN), "type: design", "type: design\nblocked_by: other_note.md"),
+    files = {DESIGN: replace_once(text_of(DESIGN), "type: plan", "type: plan\nblocked_by: other_note.md"),
              "other_note.md": "---\nstatus: implemented\nstatus_changed: 2026-01-01\ntype: note\n---\n\n# Other\n"}
     assert codes_for(tmp_path, files, DESIGN) == set()
 

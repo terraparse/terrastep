@@ -6,7 +6,7 @@ A plain explainer, not a proposal: it carries no frontmatter on purpose, because
 
 ## 1. The format
 
-terrastep is a frontmatter-and-body convention for planning documents (design docs, proposals, notes), plus a CLI that checks a repository against it. It does not apply to every markdown file in a repository — only to files inside directories you name in `terrastep.toml`. Everything else is ordinary markdown, free to look however you like.
+terrastep is a frontmatter-and-body convention for planning documents (plan docs, proposals, notes), plus a CLI that checks a repository against it. It does not apply to every markdown file in a repository — only to files inside directories you name in `terrastep.toml`. Everything else is ordinary markdown, free to look however you like.
 
 ### States, types, and closed reasons
 
@@ -14,7 +14,7 @@ terrastep is a frontmatter-and-body convention for planning documents (design do
 |---|---|
 | `status` | one of ['planning', 'ready', 'in-progress', 'implemented', 'closed'] |
 | A `note`'s `status` | one of ['in-progress', 'closed'] |
-| `type` | one of ['design', 'legacy', 'note'] (`design` is the only type checked against the body shape below) |
+| `type` | one of ['plan', 'legacy', 'note'] (`plan` is the only type checked against the body shape below) |
 | `closed_reason`, when `status: closed` | one of ['superseded', 'rejected', 'withdrawn', 'reference'] |
 
 ### Role headings (front sections, before the decision sections)
@@ -31,9 +31,9 @@ terrastep is a frontmatter-and-body convention for planning documents (design do
 | `history` | `what was built`, `implementation (?:record|history)`, `execution note` |
 | `complexity` | `complexity` |
 
-### The body, for `type: design`
+### The body, for `type: plan`
 
-Only `design` documents get the body-shape check (`legacy` and `note` are exempt): at least one non-empty `summary` or `motivation` section, then exactly `## Blockers`, `## Questions`, `## Recommendations`, `## Sequencing` in that order and nothing else between them. Blockers/Questions hold items (`B1`, `Q1`, ...); every blocker needs exactly one `[open]`/`[resolved]` tag; every item needs a recommendation (`**Recommendation...` or `→ **answer**`); Recommendations must mention every still-open item by id. Anything after Sequencing needs a `YYYY-MM-DD` in its heading. `status: ready`/`in-progress` fails if a blocker is still `[open]`; `status: implemented` needs a `history`-role section.
+Only `plan` documents get the body-shape check (`legacy` and `note` are exempt): at least one non-empty `summary` or `motivation` section, then exactly `## Blockers`, `## Questions`, `## Recommendations`, `## Sequencing` in that order and nothing else between them. Blockers/Questions hold items (`B1`, `Q1`, ...); every blocker needs exactly one `[open]`/`[resolved]` tag; every item needs a recommendation (`**Recommendation...` or `→ **answer**`); Recommendations must mention every still-open item by id. Anything after Sequencing needs a `YYYY-MM-DD` in its heading. `status: ready`/`in-progress` fails if a blocker is still `[open]`; `status: implemented` needs a `history`-role section.
 
 ### Failure codes
 
@@ -60,17 +60,17 @@ Only `design` documents get the body-shape check (`legacy` and `note` are exempt
 | `gate-open-blocker` | status is ready or in-progress but a blocker is still [open]. |
 | `body-history` | status is implemented but no section records what was built. |
 | `stale-index` | The index file is missing or doesn't match the current frontmatter. |
-| `brain-budget-ledger-missing` | A design in planning or ready has no brain_budget mapping while brain budget is enabled. |
+| `brain-budget-ledger-missing` | A plan in planning or ready has no brain_budget mapping while brain budget is enabled. |
 | `brain-budget-yaml-strict` | brain_budget has a duplicate key, an anchor, alias or merge key, a custom tag, or a value that is not a JSON type (for example an unquoted date). |
-| `brain-budget-schema-version` | schema_version does not match this terrastep's brain budget format. Run `terrastep design render`. |
+| `brain-budget-schema-version` | schema_version does not match this terrastep's brain budget format. Run `terrastep plan render`. |
 | `brain-budget-schema` | brain_budget does not match the ledger schema. |
-| `brain-budget-policy-id` | policy_id does not match the limits in terrastep.toml. Run `terrastep design render`, then check again. |
+| `brain-budget-policy-id` | policy_id does not match the limits in terrastep.toml. Run `terrastep plan render`, then check again. |
 | `brain-budget-edge` | An edge names an evaluation element that is not in the body, joins an evaluation element to itself, or repeats a relationship that is already declared. |
 | `brain-budget-cycle` | Sequencing edges form a cycle after coupled evaluation elements are grouped. |
-| `brain-budget-prereq` | A depends_on entry names a file that is not a scanned design document, names this file, or repeats another entry. |
-| `brain-budget-prereq-cycle` | Designs depend on each other in a cycle. |
+| `brain-budget-prereq` | A depends_on entry names a file that is not a scanned plan document, names this file, or repeats another entry. |
+| `brain-budget-prereq-cycle` | Plans depend on each other in a cycle. |
 | `brain-budget-draft-marker` | A scaffold draft marker is still present. |
-| `brain-budget-complexity` | The Complexity box is missing, not placed just before Blockers, or not what `terrastep design render` would write. |
+| `brain-budget-complexity` | The Complexity box is missing, not placed just before Blockers, or not what `terrastep plan render` would write. |
 
 ## 2. The tools
 
@@ -85,10 +85,10 @@ One installed command, `terrastep`:
 | `terrastep migrate` | propose or apply frontmatter for documents that have none | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep install-hooks` | write the git pre-commit hook | `-h`: show this help message and exit; `--force`: overwrite an existing hook; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep skill` | build (maintainer) or install the bundled Claude Code skill | `-h`: show this help message and exit; `--force`: overwrite an existing installed skill; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
-| `terrastep design budget` | show whether brain budget is enabled and its effective limits | `-h`: show this help message and exit; `--format`: output format; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
-| `terrastep design precheck` | the declarations stage: ledger, edges, evaluation elements, structural measures | `-h`: show this help message and exit; `--format`: output format; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
-| `terrastep design render` | write the tool-owned stamps and Complexity box | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
-| `terrastep design scaffold` | create a new design skeleton with the next free number | `-h`: show this help message and exit; `--title`: the design's title (the H1); `--slug`: default: derived from --title; `--dir`: default: scan_dirs[0]; `--depends-on`: a prerequisite design's filename; may repeat; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
+| `terrastep plan budget` | show whether brain budget is enabled and its effective limits | `-h`: show this help message and exit; `--format`: output format; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
+| `terrastep plan precheck` | the declarations stage: ledger, edges, evaluation elements, structural measures | `-h`: show this help message and exit; `--format`: output format; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
+| `terrastep plan render` | write the tool-owned stamps and Complexity box | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
+| `terrastep plan scaffold` | create a new plan skeleton with the next free number | `-h`: show this help message and exit; `--title`: the plan's title (the H1); `--slug`: default: derived from --title; `--dir`: default: scan_dirs[0]; `--depends-on`: a prerequisite plan's filename; may repeat; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep hook` | run an installed hook (called by the shim) | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 
 Every verb takes `--root DIR` and `--config FILE`; both default to auto-detection (nearest parent holding `terrastep.toml`, then the git root, then the current directory).
@@ -100,14 +100,14 @@ Every verb takes `--root DIR` and `--config FILE`; both default to auto-detectio
 | `scan_dirs` | `['journal']` | The designated directories, and only them. A list, scanned recursively (so version subdirectories are included). A markdown file outside every entry is invisible to terrastep. |
 | `index_file` | `'STATUS.md'` | The generated index's filename. Always excluded from the scan. Written inside scan_dirs[0]. |
 | `exclude` | `['CHANGELOG.md']` | Extra filenames to skip, on top of index_file. |
-| `id_floor` | `0` | The next design document's number is floor + 1. |
+| `id_floor` | `0` | The next plan document's number is floor + 1. |
 | `in_progress_cap` | `3` | Warning only: more than this many in-progress documents at once. |
 | `[aliases]` | (none) | Adds heading patterns to a role; never removes a built-in one. |
 | `warn_bare_section` | `False` | Warn on a `§N` reference with no document named alongside it. |
 | `[migrate] changelog` | (none) | A changelog file: a document it links is proposed as already finished, dated by that line. |
-| `[migrate] plan_dir` | (none) | A directory whose documents default to type: legacy during `migrate propose`. |
-| `[brain_budget] enabled` | `False` | Turns on the brain budget layer for type: design documents. |
-| `[brain_budget] max_retries` | `2` | Retries per design, shared between precheck and check, for fixing failures and for trying a different split to fit the budget. |
+| `[migrate] legacy_dir` | (none) | A directory whose documents default to type: legacy during `migrate propose`. |
+| `[brain_budget] enabled` | `False` | Turns on the brain budget layer for type: plan documents. |
+| `[brain_budget] max_retries` | `2` | Retries per plan, shared between precheck and check, for fixing failures and for trying a different split to fit the budget. |
 | `[brain_budget.limits] evaluative_count` | `10` | Blocker and question evaluation elements in the document, open or resolved. |
 | `[brain_budget.limits] dependency_edge_count` | `11` | Edges plus depends_on entries. |
 | `[brain_budget.limits] largest_coupled_cluster_size` | `3` | Evaluation elements in the largest coupled cluster. |
@@ -123,7 +123,7 @@ Every verb takes `--root DIR` and `--config FILE`; both default to auto-detectio
 
 ## 3. Brain budget
 
-An optional layer on `type: design` documents, off by default. `[brain_budget] enabled = true` in `terrastep.toml` turns it on: it measures how much judgment a design's reviewer must give at once, shows the result in a `## Complexity` section terrastep writes, and never fails a document for being over its limits — only for a malformed ledger. `terrastep design budget|precheck|render|scaffold` and the fields `terrastep check --format json` adds are in "2. The tools" above; the full ledger schema and edge rules are in the bundled skill's `references/brain_budget.md`.
+An optional layer on `type: plan` documents, off by default. `[brain_budget] enabled = true` in `terrastep.toml` turns it on: it measures how much judgment a plan's reviewer must give at once, shows the result in a `## Complexity` section terrastep writes, and never fails a document for being over its limits — only for a malformed ledger. `terrastep plan budget|precheck|render|scaffold` and the fields `terrastep check --format json` adds are in "2. The tools" above; the full ledger schema and edge rules are in the bundled skill's `references/brain_budget.md`.
 
 | Measure | Label | Default limit |
 |---|---|---:|
@@ -138,7 +138,7 @@ An optional layer on `type: design` documents, off by default. `[brain_budget] e
 
 ```
 terrastep next-id                         # → 0002
-# write journal/plans/v0.1/0002_my_proposal.md, type: design, status: planning
+# write journal/plans/v0.1/0002_my_proposal.md, type: plan, status: planning
 terrastep check                           # confirm it passes
 terrastep build                           # regenerate the index
 ```

@@ -97,7 +97,7 @@ def _doc(fm_extra: str, body: str, name: str = "0001_x.md", meta_extra: str = ""
     """A Doc built the same way core.load_doc would, from literal frontmatter
     + body text, so tests exercise the real yaml.compose()/yaml.safe_load()
     path rather than hand-built dataclasses."""
-    text = (f"---\nstatus: planning\nstatus_changed: 2026-09-29\ntype: design\n"
+    text = (f"---\nstatus: planning\nstatus_changed: 2026-09-29\ntype: plan\n"
             f"next: x\n{meta_extra}{fm_extra}\n---\n\n{body}")
     meta, body_text, yaml_error, fm_text, fm_offset = core.split_frontmatter(text)
     role_patterns = core.build_role_patterns({})
@@ -326,7 +326,7 @@ def test_a_prereq_cycle_across_three_designs_fails_on_each(tmp_path):
     sv, pid = budget.schema_version(), budget.policy_id(BudgetLimits())
 
     def make(name, target):
-        text = (f"---\nstatus: planning\nstatus_changed: 2026-09-29\ntype: design\nnext: x\n"
+        text = (f"---\nstatus: planning\nstatus_changed: 2026-09-29\ntype: plan\nnext: x\n"
                 f"brain_budget:\n  schema_version: {sv}\n  policy_id: {pid}\n"
                 f"  depends_on:\n    - file: {target}\n      contract: c\n  edges: []\n---\n"
                 f"{FRONT}## Blockers\n\nNone: none needed here.\n\n## Questions\n\n"
@@ -398,7 +398,7 @@ def test_precheck_report_on_the_worked_example_measures_3_2_1():
 WORKED_EXAMPLE_FULL = """---
 status: planning
 status_changed: 2026-09-29
-type: design
+type: plan
 next: Owner reviews.
 brain_budget:
   schema_version: {sv}
@@ -555,7 +555,7 @@ def test_render_adopts_a_planning_design_with_no_ledger():
     text = """---
 status: planning
 status_changed: 2026-09-29
-type: design
+type: plan
 next: x
 ---
 # T
@@ -637,7 +637,7 @@ def test_render_refuses_and_writes_nothing_reported_by_the_caller():
 
 def test_default_slug_lowercases_and_underscores():
     assert budget.default_slug("Add the CSV download!") == "add_the_csv_download"
-    assert budget.default_slug("   ") == "design"
+    assert budget.default_slug("   ") == "plan"
 
 
 def test_scaffold_text_off_has_no_ledger_or_complexity_section():
@@ -646,7 +646,7 @@ def test_scaffold_text_off_has_no_ledger_or_complexity_section():
     assert "brain_budget" not in text
     assert "## Complexity" not in text
     meta, _, err, _, _ = core.split_frontmatter(text)
-    assert err is None and meta["type"] == "design"
+    assert err is None and meta["type"] == "plan"
 
 
 def test_scaffold_text_on_has_ledger_and_empty_complexity_section():
@@ -686,7 +686,7 @@ def test_in_budget_value_yes_no_and_na():
     cfg_off = Config()
     assert budget.in_budget_value(doc, {doc.name: doc}, cfg_off) == "NA"
 
-    note_text = WORKED_EXAMPLE_FULL.replace("type: design", "type: note").replace(
+    note_text = WORKED_EXAMPLE_FULL.replace("type: plan", "type: note").replace(
         "status: planning", "status: in-progress")
     note_doc = _load_as_doc(note_text)
     assert budget.in_budget_value(note_doc, {note_doc.name: note_doc}, cfg) == "NA"

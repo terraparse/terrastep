@@ -8,7 +8,7 @@ Full explainer: [journal/terrastep_101.md](journal/terrastep_101.md).
 
 A YAML frontmatter block (`status`, `status_changed`, `type`, `next`, ...) on every document
 inside directories you name in `terrastep.toml` (`scan_dirs`) — nowhere else in the repo is
-touched. `type: design` documents also get a body-shape check: front sections (`summary`/
+touched. `type: plan` documents also get a body-shape check: front sections (`summary`/
 `motivation`/...), then exactly `## Blockers`, `## Questions`, `## Recommendations`,
 `## Sequencing` in order, with tagged, recommended items. `type: legacy` and `type: note` skip
 the body check. A generated index file (`STATUS.md` by default) lists every document by status;
@@ -18,7 +18,7 @@ the body check. A generated index file (`STATUS.md` by default) lists every docu
 
 ```
 venv/bin/pip install -e .
-terrastep next-id                 # next free design document number
+terrastep next-id                 # next free plan document number
 # write the doc under scan_dirs, then:
 terrastep check                   # 0 if clean, 1 on any rule failure
 terrastep build                   # regenerate the index

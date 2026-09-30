@@ -3,9 +3,9 @@
 journal/plans/v0.2/0004_brain_budget_declarations_and_precheck.md):
 the strict YAML loader, the small schema validator, the edge/graph/
 prerequisite rules, the three structural measures, and
-`terrastep design precheck`.
+`terrastep plan precheck`.
 
-0005 adds the Complexity box, word_count, `design render`/`scaffold`, and
+0005 adds the Complexity box, word_count, `plan render`/`scaffold`, and
 the layer inside `terrastep check` (the "final" stage; `check_layer`'s
 `stage` argument is prepared for it but only "declarations" is implemented
 here).
@@ -71,9 +71,9 @@ BASE_SCHEMA = {
 # The brain budget layer's whole format definition (proposal section 6.3):
 # more than the schema, because a counting or wording change re-scores a
 # document as surely as a schema change does. 0004 and 0005 implement the
-# measure methods, the YAML profile and the Complexity box; this design
+# measure methods, the YAML profile and the Complexity box; this plan
 # defines all of their names up front, so `schema_version()` exists from the
-# first commit and changes if either later design changes one.
+# first commit and changes if either later plan changes one.
 FORMAT_DEFINITION = {
     "ledger_schema": BASE_SCHEMA,
     "complexity": {
@@ -363,7 +363,7 @@ def _any_cycle(graph: dict) -> list | None:
     """Any directed cycle in `graph` ({node: {neighbor, ...}}), as the list of
     nodes on it, or None. Standard white/gray/black DFS; these graphs are a
     handful of nodes (one document's coupled clusters, or a repository's
-    designs), so a plain recursive search is fine."""
+    plans), so a plain recursive search is fine."""
     WHITE, GRAY, BLACK = 0, 1, 2
     color: dict = {}
     stack: list = []
@@ -501,16 +501,16 @@ def _check_prereqs(doc_name: str, depends_on: list, corpus: dict[str, core.Doc])
         prefix = f"brain_budget.depends_on[{i}].file"
         if file == doc_name:
             failures.append(core.Finding("brain-budget-prereq", f"{prefix} names this file",
-                                          path=prefix, expected="another scanned design document",
+                                          path=prefix, expected="another scanned plan document",
                                           actual=file))
         elif file in seen_files:
             failures.append(core.Finding(
                 "brain-budget-prereq", f"{prefix} ({file!r}) repeats an earlier entry",
                 path=prefix, expected="a file listed once", actual=file))
-        elif file not in corpus or corpus[file].type != "design":
+        elif file not in corpus or corpus[file].type != "plan":
             failures.append(core.Finding(
-                "brain-budget-prereq", f"{prefix} ({file!r}) is not a scanned design document",
-                path=prefix, expected="a scanned design document", actual=file))
+                "brain-budget-prereq", f"{prefix} ({file!r}) is not a scanned plan document",
+                path=prefix, expected="a scanned plan document", actual=file))
         seen_files.add(file)
     return failures
 
@@ -518,7 +518,7 @@ def _check_prereqs(doc_name: str, depends_on: list, corpus: dict[str, core.Doc])
 def _prereq_graph(corpus: dict[str, core.Doc]) -> dict[str, set]:
     graph: dict[str, set] = {}
     for name, doc in corpus.items():
-        if doc.type != "design":
+        if doc.type != "plan":
             continue
         raw = (doc.meta or {}).get("brain_budget")
         targets = raw.get("depends_on") if isinstance(raw, dict) else None
@@ -534,7 +534,7 @@ def _prereq_cycle_finding(doc_name: str, corpus: dict[str, core.Doc]) -> core.Fi
     if cycle is None:
         return None
     return core.Finding("brain-budget-prereq-cycle",
-                        f"designs depend on each other in a cycle: {' -> '.join(cycle)}")
+                        f"plans depend on each other in a cycle: {' -> '.join(cycle)}")
 
 
 def _contains_draft_marker(value) -> bool:
@@ -572,7 +572,7 @@ def word_count(doc: core.Doc) -> int:
 
 
 def complexity_box(measures: dict, limits: dict, cluster_members: list[str], in_budget: bool) -> str:
-    """proposal 5.6, the exact text `terrastep design render` writes and
+    """proposal 5.6, the exact text `terrastep plan render` writes and
     `terrastep check` compares against (brain-budget-complexity)."""
     rows = FORMAT_DEFINITION["complexity"]["rows"]
     lines = ["## Complexity", ""]
@@ -601,21 +601,21 @@ def _check_complexity_box(doc: core.Doc, expected_box: str) -> core.Finding | No
     blocker_secs = [(i, s) for i, s in enumerate(doc.sections) if s.kind == "B"]
     if not complexity_secs:
         return core.Finding("brain-budget-complexity", "the Complexity box is missing; "
-                            "run `terrastep design render`")
+                            "run `terrastep plan render`")
     if len(complexity_secs) > 1:
         return core.Finding("brain-budget-complexity", "more than one Complexity section; "
-                            "run `terrastep design render`")
+                            "run `terrastep plan render`")
     idx, section = complexity_secs[0]
     if not blocker_secs or idx != blocker_secs[0][0] - 1:
         return core.Finding("brain-budget-complexity",
                             "the Complexity box is not the last front section, just before "
-                            "## Blockers; run `terrastep design render`")
+                            "## Blockers; run `terrastep plan render`")
     actual = f"## {section.title}\n" + "\n".join(section.lines)
     # A whitespace-only difference is not a rewrite the model could have made
     # by hand; compare the meaningful content, not every trailing blank line.
     if actual.strip() != expected_box.strip():
         return core.Finding("brain-budget-complexity",
-                            "the Complexity box does not match what `terrastep design render` "
+                            "the Complexity box does not match what `terrastep plan render` "
                             "would write; run it again")
     return None
 
@@ -633,7 +633,7 @@ def check_layer(doc: core.Doc, corpus: dict[str, core.Doc], cfg: Config, stage: 
     """The brain budget layer's own rules (proposal 7.2), rules 1-10.
     `corpus` maps every scanned filename (Doc.name, a bare basename — safe
     because fm-id-dup already requires unique numbers repository-wide) to
-    its Doc. `stage` is "declarations" (0004: terrastep design precheck) or
+    its Doc. `stage` is "declarations" (0004: terrastep plan precheck) or
     "final" (0005: terrastep check) — both run rules 1-9 identically; "final"
     also computes word_count and runs rule 10 (the Complexity box)."""
     assert stage in ("declarations", "final")
@@ -690,7 +690,7 @@ def check_layer(doc: core.Doc, corpus: dict[str, core.Doc], cfg: Config, stage: 
         failures.append(core.Finding(
             "brain-budget-schema-version",
             f"schema_version is {ledger.get('schema_version')!r}, expected "
-            f"{current_schema_version!r}; run `terrastep design render`",
+            f"{current_schema_version!r}; run `terrastep plan render`",
             path="brain_budget.schema_version", expected=current_schema_version,
             actual=ledger.get("schema_version")))
         return finish(schema_valid=False)
@@ -709,7 +709,7 @@ def check_layer(doc: core.Doc, corpus: dict[str, core.Doc], cfg: Config, stage: 
         failures.append(core.Finding(
             "brain-budget-policy-id",
             f"policy_id is {ledger.get('policy_id')!r}, expected {current_policy_id!r}; "
-            "run `terrastep design render`, then check again",
+            "run `terrastep plan render`, then check again",
             path="brain_budget.policy_id", expected=current_policy_id, actual=ledger.get("policy_id")))
 
     if schema_errors:
@@ -780,9 +780,9 @@ def _over_budget_warning(measure: str, actual: int, limit: int, members: list[st
 
 def precheck_report(doc: core.Doc, corpus: dict[str, core.Doc], cfg: Config,
                     extra_failures: list[core.Finding]) -> dict:
-    """The full `terrastep design precheck` report (proposal 7.8): frontmatter
+    """The full `terrastep plan precheck` report (proposal 7.8): frontmatter
     and the filtered body findings (`extra_failures`, gathered by the caller)
-    plus this design's own layer rules, at the declarations stage."""
+    plus this plan's own layer rules, at the declarations stage."""
     layer = check_layer(doc, corpus, cfg, stage="declarations")
     failures = list(extra_failures) + layer.failures
     measures = layer.measures
@@ -823,7 +823,7 @@ def precheck_report(doc: core.Doc, corpus: dict[str, core.Doc], cfg: Config,
 # --------------------------------------------------------------------- render
 
 class RenderRefused(Exception):
-    """`terrastep design render` writes nothing; `reasons` names why."""
+    """`terrastep plan render` writes nothing; `reasons` names why."""
     def __init__(self, reasons: list[str]):
         self.reasons = reasons
         super().__init__("; ".join(reasons))
@@ -970,7 +970,7 @@ def render(text: str, cfg: Config) -> str:
 # ------------------------------------------------------------------- scaffold
 
 def scaffold_text(title: str, depends_on: list[str], cfg: Config, today: str) -> str:
-    """The new file's content for `terrastep design scaffold` (proposal 5.7,
+    """The new file's content for `terrastep plan scaffold` (proposal 5.7,
     9.3). `today` is status_changed's value (an ISO date string), passed in
     rather than read from the clock here, so a test can pin it. With brain
     budget off: a plain skeleton, no ledger, no Complexity section (9.3,
@@ -978,7 +978,7 @@ def scaffold_text(title: str, depends_on: list[str], cfg: Config, today: str) ->
     meta: dict = {
         "status": "planning",
         "status_changed": today,
-        "type": "design",
+        "type": "plan",
         "next": "Owner reviews.",
     }
     if cfg.brain_budget.enabled:
@@ -1004,13 +1004,13 @@ def scaffold_text(title: str, depends_on: list[str], cfg: Config, today: str) ->
 def default_slug(title: str) -> str:
     """lower case, with other characters turned into `_` (9.3, point 2)."""
     slug = re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_")
-    return slug or "design"
+    return slug or "plan"
 
 
 def in_budget_value(doc: core.Doc, corpus: dict[str, core.Doc], cfg: Config) -> str:
     """"yes", "no", or "NA" for the STATUS.md index column (5.9). Computed
     from freshly recomputed measures, not from the box last rendered."""
-    if (not cfg.brain_budget.enabled or doc.type != "design"
+    if (not cfg.brain_budget.enabled or doc.type != "plan"
             or doc.status not in ("planning", "ready") or not (doc.meta and not doc.yaml_error)):
         return "NA"
     layer = check_layer(doc, corpus, cfg, stage="final")
@@ -1030,7 +1030,7 @@ def check_report(docs: list[core.Doc], cfg: Config, failures: dict[str, list[cor
                  terrastep_version: str) -> dict:
     """`terrastep check --format json` (proposal 7.8). `failures`/`warnings`
     are core.check_corpus(...)'s result — this only reshapes them and adds
-    each budgeted design's brain_budget block."""
+    each budgeted plan's brain_budget block."""
     corpus = {d.name: d for d in docs}
     index_rel = cfg.index_rel_path
     config_sha256 = (hashlib.sha256(config_file.read_bytes()).hexdigest()
@@ -1044,7 +1044,7 @@ def check_report(docs: list[core.Doc], cfg: Config, failures: dict[str, list[cor
             "failures": [_finding_dict(f) for f in failures.get(d.rel, [])],
             "warnings": list(warnings.get(d.rel, [])),
         }
-        if cfg.brain_budget.enabled and d.type == "design" and d.status in ("planning", "ready"):
+        if cfg.brain_budget.enabled and d.type == "plan" and d.status in ("planning", "ready"):
             layer = check_layer(d, corpus, cfg, stage="final")
             limits = dataclasses.asdict(cfg.brain_budget.limits)
             layer_codes = {f.code for f in layer.failures}

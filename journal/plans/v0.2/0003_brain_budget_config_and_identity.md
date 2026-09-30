@@ -1,7 +1,7 @@
 ---
 status: implemented
 status_changed: 2026-09-29
-type: design
+type: plan
 next: None. Sequencing steps 1-4 are done (see "What was built" below). 0004 depends on this.
 ---
 

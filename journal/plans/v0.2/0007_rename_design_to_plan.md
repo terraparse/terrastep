@@ -1,8 +1,8 @@
 ---
-status: planning
+status: implemented
 status_changed: 2026-09-29
-type: design
-next: Owner reviews Q1-Q7.
+type: plan
+next: None. Sequencing steps 1-7 are done (see "What was built" below).
 brain_budget:
   schema_version: sha256:6c16c11afcf0
   policy_id: sha256:4a30b1da8ac7
@@ -226,3 +226,46 @@ treats these as inherited or historical notes, never rewritten for a later chang
 6. Update `readme.md` and the test suite (fixtures, CLI invocations, assertions) to match.
 7. Run the full test suite and `terrastep check`. Precheck, render, and check this design itself
    under the budget before it ships. Commit.
+
+## What was built (2026-09-29)
+
+Steps 1-7 done, each as recommended, no scope changes.
+
+- **`core.py`**: `PLAN_TYPES = ("plan",)`. `REQUIRED_ROLES`/`EXPECTED_ROLES` are now keyed by
+  `"plan"` — a real bug caught before it shipped: these dicts are looked up as
+  `REQUIRED_ROLES[doc.type]`, so leaving the key as `"design"` would have raised `KeyError` on
+  every plan document the moment `doc.type` became `"plan"`. `EXPECTED_ROLES["plan"]`'s *value*,
+  `("design", "scope")`, keeps its `"design"` entry unchanged — that names the front-section
+  role (`## Design`/`## Solution`), a different thing from the dict's own key (Q7).
+  `ROLE_ALIASES["design"]` is untouched, same reason.
+- **`cli.py`**: the verb group and every identifier under it renamed (`cmd_plan_budget`,
+  `cmd_plan_precheck`, `cmd_plan_render`, `cmd_plan_scaffold`, `plan_sub`, the `plan_action`
+  dest). `terrastep design ...` no longer parses at all (Q6).
+- **`budget.py`**: every docstring, message, and `doc.type` comparison updated; `default_slug`'s
+  blank-title fallback changed from `"design"` to `"plan"` for the same reason.
+- **`config.py`/`migrate.py`** (Q2): `MigrateConfig.plan_dir` → `legacy_dir`; the TOML key
+  `[migrate] plan_dir` → `[migrate] legacy_dir`; the local `is_plan` → `is_substantive` in
+  `migrate.py`. No repository configures this key today, so nothing else needed updating.
+- **The corpus**: 0001 through 0007's frontmatter `type:` field rewritten to `plan`, mechanically
+  (one line each). Their body prose is untouched, including 0007's own — this document explains a
+  rename *between* the two words, so its prose keeps using both accurately; that is not leftover
+  vocabulary, it is the subject of the document.
+- **Generated docs and skill**: `skilldoc.py`'s generated prose (`SKILL_PROCEDURE`, the
+  brain-budget procedure section, `references/*.md`) reworded throughout.
+  `terrastep skill build` and `terrastep skill install --root . --force` both ran; `terrastep
+  build` regenerated `STATUS.md`.
+- **`readme.md`**: its two mentions updated.
+- **Tests**: `tests/fixtures/0051_design_ok.md`'s `type:` field, and every `type: design`
+  literal, CLI invocation (`cli.main(["design", ...])` → `["plan", ...]`), and assertion string
+  across `test_core.py`, `test_budget.py`, `test_cli.py`, and `test_migrate.py` updated to match.
+  One test (`fm-type`'s mutation) now mutates `type: plan` *to* `type: design`, to check that the
+  retired value is itself rejected — a more direct check than the arbitrary value it used before.
+- **Verified**: `core.TYPES == ("plan", "legacy", "note")`. `terrastep design budget` fails with
+  `invalid choice: 'design'`, listing `plan` among the valid verbs. `grep -rn '"design"'
+  src/terrastep/*.py` returns only the four `ROLE_ALIASES`/`EXPECTED_ROLES` lines named above.
+  `terrastep.__version__` unchanged at `0.2.0`. Full suite: 217 passing (unchanged count — this
+  design renamed tests, it did not add or remove any). `terrastep check` passes on this
+  repository with brain budget on; this document itself precheck/render/checked clean, in
+  budget, before being marked implemented.
+
+No divergence from the plan as written.

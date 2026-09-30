@@ -185,7 +185,7 @@ def cmd_skill(args: argparse.Namespace) -> int:
     return cmd_skill_build(args) if args.skill_action == "build" else cmd_skill_install(args)
 
 
-def cmd_design_budget(args: argparse.Namespace) -> int:
+def cmd_plan_budget(args: argparse.Namespace) -> int:
     """Read-only: report whether brain budget is on, its effective limits, and
     both identity stamps. Works, and exits 0, with brain budget off too."""
     _, cfg = _load(args)
@@ -214,14 +214,14 @@ def cmd_design_budget(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_design_precheck(args: argparse.Namespace) -> int:
-    """Read-only: the declarations stage (proposal 7.1) for one design
+def cmd_plan_precheck(args: argparse.Namespace) -> int:
+    """Read-only: the declarations stage (proposal 7.1) for one plan
     document — its own frontmatter/body-declaration rules plus the brain
     budget layer's declarations-stage rules. Refuses (exit 1) when brain
     budget is off; exit 2 names FILE if it is not a scanned document."""
     root, cfg = _load(args)
     if not cfg.brain_budget.enabled:
-        print("terrastep design precheck: brain budget is not enabled "
+        print("terrastep plan precheck: brain budget is not enabled "
               "([brain_budget] enabled = true in terrastep.toml)", file=sys.stderr)
         return 1
     docs = core.scan_docs(root, cfg)
@@ -230,11 +230,11 @@ def cmd_design_precheck(args: argparse.Namespace) -> int:
     rel = path.relative_to(root).as_posix() if path.is_relative_to(root) else None
     doc = next((d for d in docs if d.rel == rel), None)
     if doc is None:
-        print(f"terrastep design precheck: not a document under {'/'.join(cfg.scan_dirs)}: "
+        print(f"terrastep plan precheck: not a document under {'/'.join(cfg.scan_dirs)}: "
               f"{args.file}", file=sys.stderr)
         return 2
-    if doc.type != "design":
-        print(f"terrastep design precheck: {doc.rel} is type {doc.type!r}, not 'design'",
+    if doc.type != "plan":
+        print(f"terrastep plan precheck: {doc.rel} is type {doc.type!r}, not 'plan'",
               file=sys.stderr)
         return 1
 
@@ -259,20 +259,20 @@ def cmd_design_precheck(args: argparse.Namespace) -> int:
     return 0 if report["declarations_valid"] else 1
 
 
-def cmd_design_render(args: argparse.Namespace) -> int:
+def cmd_plan_render(args: argparse.Namespace) -> int:
     """Write the tool-owned stamps and Complexity box (proposal 9.5). Refuses
     (exit 1, writes nothing) if brain budget is off or the file cannot be
     rendered honestly; idempotent otherwise."""
     _, cfg = _load(args)
     path = args.file
     if not path.exists():
-        print(f"terrastep design render: no such file: {path}", file=sys.stderr)
+        print(f"terrastep plan render: no such file: {path}", file=sys.stderr)
         return 1
     text = path.read_text(encoding="utf-8")
     try:
         new_text = budget_mod.render(text, cfg)
     except budget_mod.RenderRefused as e:
-        print(f"terrastep design render: refused: {'; '.join(e.reasons)}", file=sys.stderr)
+        print(f"terrastep plan render: refused: {'; '.join(e.reasons)}", file=sys.stderr)
         return 1
     if new_text == text:
         print(f"{path}: unchanged")
@@ -282,8 +282,8 @@ def cmd_design_render(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_design_scaffold(args: argparse.Namespace) -> int:
-    """Create a new design skeleton with the next free number (proposal 9.3).
+def cmd_plan_scaffold(args: argparse.Namespace) -> int:
+    """Create a new plan skeleton with the next free number (proposal 9.3).
     Never overwrites; gates each --depends-on on that document's own
     per-document check (over budget is fine; a failure is not)."""
     import datetime
@@ -298,28 +298,28 @@ def cmd_design_scaffold(args: argparse.Namespace) -> int:
     dir_path = (dir_arg if dir_arg.is_absolute() else root / dir_arg).resolve()
     scan_dir_paths = [(root / sd).resolve() for sd in cfg.scan_dirs]
     if not any(dir_path == base or base in dir_path.parents for base in scan_dir_paths):
-        print(f"terrastep design scaffold: --dir {dir_arg} is not inside any scan_dirs entry "
+        print(f"terrastep plan scaffold: --dir {dir_arg} is not inside any scan_dirs entry "
               f"({', '.join(cfg.scan_dirs)})", file=sys.stderr)
         return 1
 
     for target in (args.depends_on or []):
         target_doc = corpus.get(target)
-        if target_doc is None or target_doc.type != "design":
-            print(f"terrastep design scaffold: --depends-on {target}: not a scanned design "
+        if target_doc is None or target_doc.type != "plan":
+            print(f"terrastep plan scaffold: --depends-on {target}: not a scanned plan "
                   "document", file=sys.stderr)
             return 1
         findings, _ = core.check_doc(target_doc, names, id_counts, cfg, corpus)
         if findings:
             codes = ", ".join(sorted({f.code for f in findings}))
-            print(f"terrastep design scaffold: --depends-on {target} fails `terrastep check` "
-                  f"({codes}); it must pass before a design can depend on it", file=sys.stderr)
+            print(f"terrastep plan scaffold: --depends-on {target} fails `terrastep check` "
+                  f"({codes}); it must pass before a plan can depend on it", file=sys.stderr)
             return 1
 
     number = core.next_id(docs, cfg)
     slug = args.slug or budget_mod.default_slug(args.title)
     target_path = dir_path / f"{number:04d}_{slug}.md"
     if target_path.exists():
-        print(f"terrastep design scaffold: {target_path} already exists", file=sys.stderr)
+        print(f"terrastep plan scaffold: {target_path} already exists", file=sys.stderr)
         return 1
 
     text = budget_mod.scaffold_text(args.title, args.depends_on or [], cfg,
@@ -383,35 +383,35 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(p)
     p.set_defaults(func=cmd_skill)
 
-    p = sub.add_parser("design", help="brain budget: budget, precheck, render, scaffold")
-    design_sub = p.add_subparsers(dest="design_action", required=True)
-    pd = design_sub.add_parser("budget", help="show whether brain budget is enabled and its "
-                                              "effective limits")
+    p = sub.add_parser("plan", help="brain budget: budget, precheck, render, scaffold")
+    plan_sub = p.add_subparsers(dest="plan_action", required=True)
+    pd = plan_sub.add_parser("budget", help="show whether brain budget is enabled and its "
+                                            "effective limits")
     pd.add_argument("--format", choices=("text", "json"), default="text", help="output format")
     _add_common(pd)
-    pd.set_defaults(func=cmd_design_budget)
+    pd.set_defaults(func=cmd_plan_budget)
 
-    pp = design_sub.add_parser("precheck", help="the declarations stage: ledger, edges, "
-                                                "evaluation elements, structural measures")
-    pp.add_argument("file", type=Path, help="the design document to precheck")
+    pp = plan_sub.add_parser("precheck", help="the declarations stage: ledger, edges, "
+                                              "evaluation elements, structural measures")
+    pp.add_argument("file", type=Path, help="the plan document to precheck")
     pp.add_argument("--format", choices=("text", "json"), default="text", help="output format")
     _add_common(pp)
-    pp.set_defaults(func=cmd_design_precheck)
+    pp.set_defaults(func=cmd_plan_precheck)
 
-    pr = design_sub.add_parser("render", help="write the tool-owned stamps and Complexity box")
-    pr.add_argument("file", type=Path, help="the design document to render")
+    pr = plan_sub.add_parser("render", help="write the tool-owned stamps and Complexity box")
+    pr.add_argument("file", type=Path, help="the plan document to render")
     _add_common(pr)
-    pr.set_defaults(func=cmd_design_render)
+    pr.set_defaults(func=cmd_plan_render)
 
-    psc = design_sub.add_parser("scaffold", help="create a new design skeleton with the next "
-                                                 "free number")
-    psc.add_argument("--title", required=True, help="the design's title (the H1)")
+    psc = plan_sub.add_parser("scaffold", help="create a new plan skeleton with the next "
+                                               "free number")
+    psc.add_argument("--title", required=True, help="the plan's title (the H1)")
     psc.add_argument("--slug", default=None, help="default: derived from --title")
     psc.add_argument("--dir", type=Path, default=None, help="default: scan_dirs[0]")
     psc.add_argument("--depends-on", action="append", default=None, metavar="FILE",
-                     help="a prerequisite design's filename; may repeat")
+                     help="a prerequisite plan's filename; may repeat")
     _add_common(psc)
-    psc.set_defaults(func=cmd_design_scaffold)
+    psc.set_defaults(func=cmd_plan_scaffold)
 
     p = sub.add_parser("hook", help="run an installed hook (called by the shim)")
     p.add_argument("hook_name", choices=("pre-commit",))

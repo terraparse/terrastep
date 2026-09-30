@@ -1,7 +1,7 @@
 ---
 status: implemented
 status_changed: 2026-09-28
-type: design
+type: plan
 next: None. Sequencing steps 1-7 are done (see "What was built" below). Step 8 (Perry, tmdc-web, publishing publicly) is separate future work.
 ---
 

@@ -1,7 +1,7 @@
 ---
 status: implemented
 status_changed: 2026-09-28
-type: design
+type: plan
 next: None. Sequencing steps 1-9 are done (see "What was built" below). Step 10 (the tmdc-web corpus, the skills doc, the Perry switch doc) is separate future work.
 ---
 

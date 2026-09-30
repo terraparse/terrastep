@@ -118,9 +118,10 @@ def propose_row(doc: core.Doc, root: Path, config: Config, changelog: dict[str, 
     line = parse_status_line(text)
     status, reason, flags, pos = guess_status(line)
     has_blockers = any(s.kind == "B" for s in doc.sections)
-    is_plan = has_blockers or (config.migrate.plan_dir is not None
-                                and doc.rel.startswith(config.migrate.plan_dir) and line is not None)
-    dtype = "legacy" if is_plan else "note"
+    is_substantive = has_blockers or (config.migrate.legacy_dir is not None
+                                      and doc.rel.startswith(config.migrate.legacy_dir)
+                                      and line is not None)
+    dtype = "legacy" if is_substantive else "note"
     if dtype == "note":
         status, reason = note_state(status, reason)
 
@@ -157,7 +158,7 @@ def write_proposal(root: Path, config: Config) -> int:
         "Values are checked against `terrastep.core` on apply.", "",
         "How each guess was made: `status` and `closed_reason` from the words of the doc's `**Status: ...**` "
         "line (none: `closed` / `reference`). `type` is `legacy` for a plan (has a Blockers section, or sits "
-        "under `[migrate] plan_dir` and has a status line) and `note` for everything else. `changed` is "
+        "under `[migrate] legacy_dir` and has a status line) and `note` for everything else. `changed` is "
         "the first date after the verdict word in the status line, else the last git commit date. A doc with no "
         "usable status line that `[migrate] changelog` links is proposed `implemented`, dated by that line "
         "(see the `basis` column).", "",

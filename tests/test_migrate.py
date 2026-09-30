@@ -9,7 +9,7 @@ from terrastep.config import Config, MigrateConfig
 
 import pytest
 
-CONFIG = Config(migrate=MigrateConfig(changelog="journal/CHANGELOG.md", plan_dir="journal/v0-6/refactoring/"))
+CONFIG = Config(migrate=MigrateConfig(changelog="journal/CHANGELOG.md", legacy_dir="journal/v0-6/refactoring/"))
 
 
 @pytest.mark.parametrize("line,status,reason", [

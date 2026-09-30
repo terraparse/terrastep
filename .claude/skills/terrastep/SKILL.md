@@ -1,6 +1,6 @@
 ---
 name: terrastep
-description: Use when writing, reviewing, or checking a terrastep design document, when asked to plan or design work in a repository with a terrastep.toml, or when a task mentions terrastep, scan_dirs, brain budget, or the Blockers/Questions/Recommendations/Sequencing shape.
+description: Use when writing, reviewing, or checking a terrastep plan document, when asked to plan or design work in a repository with a terrastep.toml, or when a task mentions terrastep, scan_dirs, brain budget, or the Blockers/Questions/Recommendations/Sequencing shape.
 terrastep_version: 0.2.0
 ---
 
@@ -23,10 +23,10 @@ write or edit:
 If either answer is no, the format does not apply to this file — write it however the task needs,
 and stop reading here. This skill only governs documents that terrastep itself would scan.
 
-## Writing a new `type: design` document
+## Writing a new `type: plan` document
 
 1. `terrastep next-id` for the number.
-2. Scaffold: `terrastep design scaffold --title "..."` (works whether brain budget is on or off).
+2. Scaffold: `terrastep plan scaffold --title "..."` (works whether brain budget is on or off).
    Never write the frontmatter or the file by hand. See `references/format.md` for the full body
    shape (item tags, recommendation coverage, role headings).
 3. `terrastep check`. On any failure, look up the code in `references/format.md` and fix it —
@@ -36,13 +36,13 @@ and stop reading here. This skill only governs documents that terrastep itself w
    pre-commit and Stop hooks (already installed if this repo ran `terrastep install-hooks`)
    uneventful rather than a surprise later.
 
-## Writing design documents under a brain budget
+## Writing plan documents under a brain budget
 
-Use this procedure when you are asked to plan or design work and `terrastep design budget`
-reports `"enabled": true`. When it reports `false`, follow the design procedure above without
-the budget steps.
+Use this procedure when you are asked to plan or design work and `terrastep plan budget`
+reports `"enabled": true`. When it reports `false`, follow the procedure above without the
+budget steps.
 
-1. **Read the budget.** Run `terrastep design budget --format json`. Use its limits and
+1. **Read the budget.** Run `terrastep plan budget --format json`. Use its limits and
    `max_retries`. Do not assume the defaults. Do not copy the limits into any file.
 2. **Decompose before writing.** List every evaluation element: each consequential choice
    (another plausible answer would change behavior, a public contract, persistent state, access
@@ -50,12 +50,12 @@ the budget steps.
    assumption the reviewer must judge. An evaluation element that must be settled or verified
    before work starts is a blocker; any other is a question. For each pair of evaluation
    elements, ask: "If the first answer changed, would I have to reconsider the second? What
-   specific constraint would change?" Keep coupled evaluation elements in one design. Split
-   designs only where one design can rely on a stated contract from another. There is no limit
-   on the number of designs.
-3. **Order the designs** so each comes after its prerequisites. A prerequisite must pass
-   `terrastep check` before you scaffold a design that depends on it.
-4. **Scaffold** each design with `terrastep design scaffold`. Never create or overwrite a design
+   specific constraint would change?" Keep coupled evaluation elements in one plan. Split
+   plans only where one plan can rely on a stated contract from another. There is no limit
+   on the number of plans.
+3. **Order the plans** so each comes after its prerequisites. A prerequisite must pass
+   `terrastep check` before you scaffold a plan that depends on it.
+4. **Scaffold** each plan with `terrastep plan scaffold`. Never create or overwrite a plan
    file by hand.
 5. **Declare.** Read each prerequisite's file for its contract. Write the evaluation elements in
    Blockers and Questions, each with a recommendation. In `brain_budget`, add the edges and a
@@ -63,26 +63,26 @@ the budget steps.
    supplying answer can stay fixed. Use `coupled` when the evaluation elements must be judged
    together, or when you are unsure. One record per pair, direct constraints only. Never write
    `schema_version`, `policy_id`, or the Complexity box.
-6. **Precheck** with `terrastep design precheck FILE --format json` before you write prose. Fix
+6. **Precheck** with `terrastep plan precheck FILE --format json` before you write prose. Fix
    what it reports. If a measure is over budget and an honest re-split exists, try it. If the
-   excess is a coupled cluster, keep it together; the design will be flagged.
+   excess is a coupled cluster, keep it together; the plan will be flagged.
 7. **Write the prose.** Replace every draft marker. Recommendations must mention every open
    evaluation element. If writing reveals a new choice, assumption or dependency, make it an
    evaluation element or an edge and precheck again.
-8. **Render and check.** Run `terrastep design render FILE`, then
+8. **Render and check.** Run `terrastep plan render FILE`, then
    `terrastep check FILE --format json`. Patch only what the diagnostics name. Render again if a
    patch changes a measure. Check again after the last edit.
 9. **Respect `max_retries`.** A retry is one round of changes after a reported failure or an
-   over-budget measure. The count is per design, shared between precheck and check. When it runs
-   out, deliver the design: flagged if it is over budget, or as a failed draft if format
+   over-budget measure. The count is per plan, shared between precheck and check. When it runs
+   out, deliver the plan: flagged if it is over budget, or as a failed draft if format
    failures remain.
-10. **Finish.** Run `terrastep build`, then `terrastep check`. Report each design in
+10. **Finish.** Run `terrastep build`, then `terrastep check`. Report each plan in
     prerequisite order, with whether it is within budget, which measure is over and what split
     you tried, and its open blockers. Never claim a check that did not run.
 
-Never make a design look within budget by deleting a real evaluation element, merging
+Never make a plan look within budget by deleting a real evaluation element, merging
 independent evaluation elements, leaving a choice in prose, relabeling a coupled edge as
-sequencing, or splitting coupled evaluation elements across designs.
+sequencing, or splitting coupled evaluation elements across plans.
 
 ## Fixing a document that fails `terrastep check`
 

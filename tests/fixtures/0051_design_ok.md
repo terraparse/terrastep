@@ -1,7 +1,7 @@
 ---
 status: planning
 status_changed: 2026-09-23
-type: design
+type: plan
 next: Owner reviews.
 ---
 

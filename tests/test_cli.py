@@ -199,7 +199,7 @@ def test_a_config_error_exits_2_for_build_too(tmp_path, capsys):
 
 def test_design_budget_works_and_exits_0_with_brain_budget_off(tmp_path, capsys):
     root = make(tmp_path)
-    assert cli.main(["design", "budget", "--root", str(root)]) == 0
+    assert cli.main(["plan", "budget", "--root", str(root)]) == 0
     out = capsys.readouterr().out
     assert "enabled: False" in out
     assert "policy_id: sha256:4a30b1da8ac7" in out
@@ -211,7 +211,7 @@ def test_design_budget_json_marks_unset_limits_as_defaults(tmp_path, capsys):
     (root / "terrastep.toml").write_text(
         'scan_dirs = ["journal"]\n\n[brain_budget]\nenabled = true\n\n'
         '[brain_budget.limits]\nword_count = 2500\n', encoding="utf-8")
-    assert cli.main(["design", "budget", "--root", str(root), "--format", "json"]) == 0
+    assert cli.main(["plan", "budget", "--root", str(root), "--format", "json"]) == 0
     import json
     result = json.loads(capsys.readouterr().out)
     assert result["enabled"] is True
@@ -261,7 +261,7 @@ do it.
 
 
 def _design_doc(edges="[]") -> str:
-    return (f"---\nstatus: planning\nstatus_changed: 2026-09-29\ntype: design\nnext: x\n"
+    return (f"---\nstatus: planning\nstatus_changed: 2026-09-29\ntype: plan\nnext: x\n"
             f"brain_budget:\n  schema_version: {_SV}\n  policy_id: {_PID}\n"
             f"  depends_on: []\n  edges: {edges}\n---\n# A design\n\n{_DESIGN_BODY}")
 
@@ -277,7 +277,7 @@ def _bb_root(tmp_path: Path, enabled: bool = True, edges: str = "[]") -> Path:
 
 def test_precheck_refuses_when_brain_budget_is_off(tmp_path, capsys):
     root = _bb_root(tmp_path, enabled=False)
-    assert cli.main(["design", "precheck", str(root / "journal/plans/0001_x.md"),
+    assert cli.main(["plan", "precheck", str(root / "journal/plans/0001_x.md"),
                       "--root", str(root)]) == 1
     assert "not enabled" in capsys.readouterr().err
 
@@ -286,7 +286,7 @@ def test_precheck_exit_2_for_a_file_outside_scan_dirs(tmp_path, capsys):
     root = _bb_root(tmp_path)
     outside = tmp_path / "elsewhere.md"
     outside.write_text(_design_doc(), encoding="utf-8")
-    assert cli.main(["design", "precheck", str(outside), "--root", str(root)]) == 2
+    assert cli.main(["plan", "precheck", str(outside), "--root", str(root)]) == 2
     assert "not a document under journal/plans" in capsys.readouterr().err
 
 
@@ -294,14 +294,14 @@ def test_precheck_exit_1_for_a_non_design_document(tmp_path, capsys):
     root = _bb_root(tmp_path)
     note = root / "journal" / "plans" / "0002_note.md"
     note.write_text(GOOD, encoding="utf-8")  # type: note
-    assert cli.main(["design", "precheck", str(note), "--root", str(root)]) == 1
-    assert "not 'design'" in capsys.readouterr().err
+    assert cli.main(["plan", "precheck", str(note), "--root", str(root)]) == 1
+    assert "not 'plan'" in capsys.readouterr().err
 
 
 def test_precheck_passes_the_worked_example_with_measures_3_2_1(tmp_path, capsys):
     root = _bb_root(tmp_path, edges='[{from: Q1, to: Q2, type: sequencing, contract: c}]')
     target = root / "journal/plans/0001_x.md"
-    assert cli.main(["design", "precheck", str(target), "--root", str(root),
+    assert cli.main(["plan", "precheck", str(target), "--root", str(root),
                       "--format", "json"]) == 0
     import json
     report = json.loads(capsys.readouterr().out)
@@ -315,7 +315,7 @@ def test_precheck_passes_the_worked_example_with_measures_3_2_1(tmp_path, capsys
 def test_precheck_text_output_ok_line(tmp_path, capsys):
     root = _bb_root(tmp_path)
     target = root / "journal/plans/0001_x.md"
-    assert cli.main(["design", "precheck", str(target), "--root", str(root)]) == 0
+    assert cli.main(["plan", "precheck", str(target), "--root", str(root)]) == 0
     assert "OK: journal/plans/0001_x.md: declarations valid" in capsys.readouterr().out
 
 
@@ -329,7 +329,7 @@ def test_precheck_over_budget_exits_0_with_a_warning(tmp_path, capsys):
     pid = budget_mod_for_tests.policy_id(_BudgetLimits(largest_coupled_cluster_size=2))
     target = root / "journal/plans/0001_x.md"
     target.write_text(target.read_text(encoding="utf-8").replace(_PID, pid), encoding="utf-8")
-    assert cli.main(["design", "precheck", str(target), "--root", str(root)]) == 0
+    assert cli.main(["plan", "precheck", str(target), "--root", str(root)]) == 0
     err = capsys.readouterr().err
     assert "WARN: journal/plans/0001_x.md: over budget: largest coupled cluster size 3 > 2" in err
 
@@ -337,7 +337,7 @@ def test_precheck_over_budget_exits_0_with_a_warning(tmp_path, capsys):
 def test_precheck_exit_1_on_a_failure(tmp_path, capsys):
     root = _bb_root(tmp_path, edges='[{from: Q1, to: Q9, type: sequencing, contract: c}]')
     target = root / "journal/plans/0001_x.md"
-    assert cli.main(["design", "precheck", str(target), "--root", str(root)]) == 1
+    assert cli.main(["plan", "precheck", str(target), "--root", str(root)]) == 1
     assert "FAIL: journal/plans/0001_x.md: [brain-budget-edge]" in capsys.readouterr().err
 
 
@@ -353,7 +353,7 @@ def _rendered_design_doc(root: Path, edges: str = "[]") -> Path:
     never drift from what render itself considers correct)."""
     from terrastep import config as _config_mod
     cfg = _config_mod.load(root)
-    draft = (f"---\nstatus: planning\nstatus_changed: 2026-09-29\ntype: design\nnext: x\n"
+    draft = (f"---\nstatus: planning\nstatus_changed: 2026-09-29\ntype: plan\nnext: x\n"
             f"brain_budget:\n  schema_version: {_SV}\n  policy_id: {_PID}\n"
             f"  depends_on: []\n  edges: {edges}\n---\n# A design\n\n{_DESIGN_BODY}")
     text = _budget_mod.render(draft, cfg)
@@ -365,9 +365,9 @@ def _rendered_design_doc(root: Path, edges: str = "[]") -> Path:
 def test_design_render_is_idempotent_through_the_cli(tmp_path, capsys):
     root = _bb_root(tmp_path)
     target = root / "journal/plans/0001_x.md"
-    assert cli.main(["design", "render", str(target), "--root", str(root)]) == 0
+    assert cli.main(["plan", "render", str(target), "--root", str(root)]) == 0
     assert "wrote" in capsys.readouterr().out
-    assert cli.main(["design", "render", str(target), "--root", str(root)]) == 0
+    assert cli.main(["plan", "render", str(target), "--root", str(root)]) == 0
     assert "unchanged" in capsys.readouterr().out
 
 
@@ -375,7 +375,7 @@ def test_design_render_refuses_when_brain_budget_is_off(tmp_path, capsys):
     root = _bb_root(tmp_path, enabled=False)
     target = root / "journal/plans/0001_x.md"
     before = target.read_text(encoding="utf-8")
-    assert cli.main(["design", "render", str(target), "--root", str(root)]) == 1
+    assert cli.main(["plan", "render", str(target), "--root", str(root)]) == 1
     assert "refused" in capsys.readouterr().err
     assert target.read_text(encoding="utf-8") == before  # nothing written
 
@@ -446,7 +446,7 @@ def test_scaffold_writes_a_design_and_it_fails_check_until_completed(tmp_path, c
     root = _bb_root(tmp_path)
     (root / "journal/plans/0001_x.md").unlink()  # start from a clean scan_dirs
     (root / "journal/plans/STATUS.md").unlink(missing_ok=True)
-    assert cli.main(["design", "scaffold", "--title", "A new design", "--root", str(root)]) == 0
+    assert cli.main(["plan", "scaffold", "--title", "A new design", "--root", str(root)]) == 0
     target = root / "journal/plans/0001_a_new_design.md"
     assert target.exists()
     cli.main(["build", "--root", str(root)])
@@ -463,7 +463,7 @@ def test_scaffold_refuses_to_overwrite(tmp_path, capsys, monkeypatch):
     root = _bb_root(tmp_path)  # already has journal/plans/0001_x.md
     monkeypatch.setattr(_core, "next_id", lambda docs, cfg: 1)
     before = (root / "journal/plans/0001_x.md").read_text(encoding="utf-8")
-    assert cli.main(["design", "scaffold", "--title", "X", "--slug", "x",
+    assert cli.main(["plan", "scaffold", "--title", "X", "--slug", "x",
                       "--root", str(root)]) == 1
     assert (root / "journal/plans/0001_x.md").read_text(encoding="utf-8") == before
 
@@ -472,7 +472,7 @@ def test_scaffold_refuses_a_dir_outside_scan_dirs(tmp_path, capsys):
     root = _bb_root(tmp_path)
     outside = root / "elsewhere"
     outside.mkdir()
-    assert cli.main(["design", "scaffold", "--title", "X", "--dir", str(outside),
+    assert cli.main(["plan", "scaffold", "--title", "X", "--dir", str(outside),
                       "--root", str(root)]) == 1
     assert "not inside any scan_dirs entry" in capsys.readouterr().err
 
@@ -480,9 +480,9 @@ def test_scaffold_refuses_a_dir_outside_scan_dirs(tmp_path, capsys):
 def test_scaffold_refuses_a_failing_prerequisite(tmp_path, capsys):
     root = _bb_root(tmp_path)
     bad = root / "journal/plans/0002_bad.md"
-    bad.write_text("---\nstatus: planning\nstatus_changed: 2026-09-29\ntype: design\nnext: x\n"
+    bad.write_text("---\nstatus: planning\nstatus_changed: 2026-09-29\ntype: plan\nnext: x\n"
                   "---\n# Bad\n", encoding="utf-8")
-    assert cli.main(["design", "scaffold", "--title", "Y", "--depends-on", "0002_bad.md",
+    assert cli.main(["plan", "scaffold", "--title", "Y", "--depends-on", "0002_bad.md",
                       "--root", str(root)]) == 1
     assert "fails `terrastep check`" in capsys.readouterr().err
 
@@ -502,7 +502,7 @@ def test_scaffold_accepts_an_over_budget_prerequisite(tmp_path, capsys):
     text = target.read_text(encoding="utf-8")
     rendered = _budget_mod.render(text, _config_mod.load(root))
     target.write_text(rendered, encoding="utf-8")
-    assert cli.main(["design", "scaffold", "--title", "Z", "--depends-on", "0001_x.md",
+    assert cli.main(["plan", "scaffold", "--title", "Z", "--depends-on", "0001_x.md",
                       "--root", str(root)]) == 0
 
 
@@ -510,7 +510,7 @@ def test_scaffold_with_brain_budget_off_writes_a_plain_skeleton(tmp_path, capsys
     root = make(tmp_path, scan_dir="journal/plans")
     (root / "terrastep.toml").write_text('scan_dirs = ["journal/plans"]\n', encoding="utf-8")
     (root / "journal/plans/a.md").unlink()
-    assert cli.main(["design", "scaffold", "--title", "Plain", "--root", str(root)]) == 0
+    assert cli.main(["plan", "scaffold", "--title", "Plain", "--root", str(root)]) == 0
     target = root / "journal/plans/0001_plain.md"
     text = target.read_text(encoding="utf-8")
     assert "brain_budget" not in text and "## Complexity" not in text
@@ -543,7 +543,7 @@ def test_terrastep_own_journal_passes_with_brain_budget_on():
     docs = _core_mod.scan_docs(root, cfg)
     failures, _warnings = _core_mod.check_docs(docs, cfg)
     shipped = {d.rel: d.status for d in docs
-              if d.type == "design" and d.status in ("implemented", "in-progress", "closed")}
+              if d.type == "plan" and d.status in ("implemented", "in-progress", "closed")}
     assert shipped, "expected at least one already-shipped design in this repository"
     unexpected = {rel: fs for rel, fs in failures.items() if rel in shipped}
     assert unexpected == {}, unexpected

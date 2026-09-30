@@ -26,16 +26,27 @@ def _header(title: str) -> str:
 
 
 def _verb_help() -> list[tuple[str, str, list[tuple[str, str]]]]:
-    """[(verb, help text, [(flag, help text), ...]), ...], read from cli.py's own argparse setup."""
+    """[(verb, help text, [(flag, help text), ...]), ...], read from cli.py's own argparse
+    setup. A verb built with nested subparsers (0005: `design`) is expanded into one row per
+    action, named "verb action" (e.g. "design precheck"), each with its own flags."""
     parser = build_parser()
     subparsers_action = next(a for a in parser._actions if isinstance(a, argparse._SubParsersAction))
     out = []
     for choice_action in subparsers_action._choices_actions:
         name = choice_action.dest
         sub = subparsers_action.choices[name]
-        flags = [(a.option_strings[0], a.help) for a in sub._actions
-                 if a.option_strings and a.help]
-        out.append((name, choice_action.help, flags))
+        nested = next((a for a in sub._actions if isinstance(a, argparse._SubParsersAction)), None)
+        if nested is None:
+            flags = [(a.option_strings[0], a.help) for a in sub._actions
+                     if a.option_strings and a.help]
+            out.append((name, choice_action.help, flags))
+            continue
+        for nested_choice in nested._choices_actions:
+            nested_name = nested_choice.dest
+            nested_sub = nested.choices[nested_name]
+            flags = [(a.option_strings[0], a.help) for a in nested_sub._actions
+                     if a.option_strings and a.help]
+            out.append((f"{name} {nested_name}", nested_choice.help, flags))
     return out
 
 

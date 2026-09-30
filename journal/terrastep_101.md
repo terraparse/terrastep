@@ -29,6 +29,7 @@ terrastep is a frontmatter-and-body convention for planning documents (design do
 | `evidence` | `what is true today`, `what exists today`, `findings`, `pilot results`, `evidence`, `method` |
 | `verification` | `verification`, `tests`, `test plan`, `negative controls` |
 | `history` | `what was built`, `implementation (?:record|history)`, `execution note` |
+| `complexity` | `complexity` |
 
 ### The body, for `type: design`
 
@@ -69,6 +70,7 @@ Only `design` documents get the body-shape check (`legacy` and `note` are exempt
 | `brain-budget-prereq` | A depends_on entry names a file that is not a scanned design document, names this file, or repeats another entry. |
 | `brain-budget-prereq-cycle` | Designs depend on each other in a cycle. |
 | `brain-budget-draft-marker` | A scaffold draft marker is still present. |
+| `brain-budget-complexity` | The Complexity box is missing, not placed just before Blockers, or not what `terrastep design render` would write. |
 
 ## 2. The tools
 
@@ -76,14 +78,17 @@ One installed command, `terrastep`:
 
 | Verb | Does | Flags |
 |---|---|---|
-| `terrastep check` | check every document under scan_dirs | `-h`: show this help message and exit; `--if-changed`: exit 0 with no output when scan_dirs has no uncommitted change; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
+| `terrastep check` | check every document under scan_dirs | `-h`: show this help message and exit; `--if-changed`: exit 0 with no output when scan_dirs has no uncommitted change; `--format`: output format; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep survey` | read-only heading survey | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep build` | write the index file | `-h`: show this help message and exit; `--stdout`: print the index instead of writing it; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep next-id` | print the next free document number | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep migrate` | propose or apply frontmatter for documents that have none | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep install-hooks` | write the git pre-commit hook | `-h`: show this help message and exit; `--force`: overwrite an existing hook; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep skill` | build (maintainer) or install the bundled Claude Code skill | `-h`: show this help message and exit; `--force`: overwrite an existing installed skill; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
-| `terrastep design` | brain budget: budget, precheck (see also: render, scaffold, added by 0005) | `-h`: show this help message and exit |
+| `terrastep design budget` | show whether brain budget is enabled and its effective limits | `-h`: show this help message and exit; `--format`: output format; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
+| `terrastep design precheck` | the declarations stage: ledger, edges, evaluation elements, structural measures | `-h`: show this help message and exit; `--format`: output format; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
+| `terrastep design render` | write the tool-owned stamps and Complexity box | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
+| `terrastep design scaffold` | create a new design skeleton with the next free number | `-h`: show this help message and exit; `--title`: the design's title (the H1); `--slug`: default: derived from --title; `--dir`: default: scan_dirs[0]; `--depends-on`: a prerequisite design's filename; may repeat; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 | `terrastep hook` | run an installed hook (called by the shim) | `-h`: show this help message and exit; `--root`: repo root (default: auto-detected); `--config`: path to terrastep.toml (default: auto-detected) |
 
 Every verb takes `--root DIR` and `--config FILE`; both default to auto-detection (nearest parent holding `terrastep.toml`, then the git root, then the current directory).

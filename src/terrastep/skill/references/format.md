@@ -23,6 +23,7 @@
 | `evidence` | `what is true today`, `what exists today`, `findings`, `pilot results`, `evidence`, `method` |
 | `verification` | `verification`, `tests`, `test plan`, `negative controls` |
 | `history` | `what was built`, `implementation (?:record|history)`, `execution note` |
+| `complexity` | `complexity` |
 
 ### Failure codes
 
@@ -59,3 +60,4 @@
 | `brain-budget-prereq` | A depends_on entry names a file that is not a scanned design document, names this file, or repeats another entry. |
 | `brain-budget-prereq-cycle` | Designs depend on each other in a cycle. |
 | `brain-budget-draft-marker` | A scaffold draft marker is still present. |
+| `brain-budget-complexity` | The Complexity box is missing, not placed just before Blockers, or not what `terrastep design render` would write. |

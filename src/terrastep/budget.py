@@ -19,6 +19,7 @@ import dataclasses
 import hashlib
 import json
 import re
+from pathlib import Path
 
 import yaml
 
@@ -547,22 +548,95 @@ def _contains_draft_marker(value) -> bool:
     return False
 
 
+_ALL_MEASURES = ("evaluative_count", "dependency_edge_count", "largest_coupled_cluster_size",
+                "word_count")
+
+
+def word_count(doc: core.Doc) -> int:
+    """proposal 4.5: from the H1 line through the end of ## Sequencing, with
+    the whole `## Complexity` section removed. Reassembled from doc.sections
+    (each heading's original text plus its lines) rather than re-parsing raw
+    text — this is a word count, so exact spacing does not matter, only which
+    lines are in or out."""
+    lines = doc.body.splitlines()
+    h1_idx = next((i for i, ln in enumerate(lines) if ln.startswith("# ")), None)
+    counted: list[str] = [] if h1_idx is None else [lines[h1_idx]]
+    for section in doc.sections:
+        if section.kind == "F" and section.role == "complexity":
+            continue
+        counted.append(f"## {section.title}")
+        counted.extend(section.lines)
+        if section.kind == "S":
+            break  # a dated section after Sequencing is never counted
+    return len("\n".join(counted).split())
+
+
+def complexity_box(measures: dict, limits: dict, cluster_members: list[str], in_budget: bool) -> str:
+    """proposal 5.6, the exact text `terrastep design render` writes and
+    `terrastep check` compares against (brain-budget-complexity)."""
+    rows = FORMAT_DEFINITION["complexity"]["rows"]
+    lines = ["## Complexity", ""]
+    if in_budget:
+        lines.append(FORMAT_DEFINITION["complexity"]["flag"]["true"])
+    else:
+        over = []
+        for machine, label in rows:
+            if measures[machine] is not None and measures[machine] > limits[machine]:
+                text = f"{label.lower()} {measures[machine]} > {limits[machine]}"
+                if machine == "largest_coupled_cluster_size":
+                    text += f" ({', '.join(cluster_members)})"
+                over.append(text)
+        lines.append(f"{FORMAT_DEFINITION['complexity']['flag']['false']} Over: "
+                     + "; ".join(over) + ".")
+    lines += ["", "| Measure | Actual | Limit |", "| --- | ---: | ---: |"]
+    lines += [f"| {label} | {measures[machine]} | {limits[machine]} |" for machine, label in rows]
+    return "\n".join(lines) + "\n"
+
+
+def _check_complexity_box(doc: core.Doc, expected_box: str) -> core.Finding | None:
+    """rule 10 (final only): the box is present, is the last front section,
+    sits just before ## Blockers, and equals what render would write."""
+    complexity_secs = [(i, s) for i, s in enumerate(doc.sections)
+                       if s.kind == "F" and s.role == "complexity"]
+    blocker_secs = [(i, s) for i, s in enumerate(doc.sections) if s.kind == "B"]
+    if not complexity_secs:
+        return core.Finding("brain-budget-complexity", "the Complexity box is missing; "
+                            "run `terrastep design render`")
+    if len(complexity_secs) > 1:
+        return core.Finding("brain-budget-complexity", "more than one Complexity section; "
+                            "run `terrastep design render`")
+    idx, section = complexity_secs[0]
+    if not blocker_secs or idx != blocker_secs[0][0] - 1:
+        return core.Finding("brain-budget-complexity",
+                            "the Complexity box is not the last front section, just before "
+                            "## Blockers; run `terrastep design render`")
+    actual = f"## {section.title}\n" + "\n".join(section.lines)
+    # A whitespace-only difference is not a rewrite the model could have made
+    # by hand; compare the meaningful content, not every trailing blank line.
+    if actual.strip() != expected_box.strip():
+        return core.Finding("brain-budget-complexity",
+                            "the Complexity box does not match what `terrastep design render` "
+                            "would write; run it again")
+    return None
+
+
 @dataclasses.dataclass
 class LayerResult:
     failures: list[core.Finding]
     warnings: list[str]
     measures: dict[str, "int | None"]
     cluster_members: list[str]
+    in_budget: "bool | None" = None
 
 
 def check_layer(doc: core.Doc, corpus: dict[str, core.Doc], cfg: Config, stage: str) -> LayerResult:
-    """The brain budget layer's own rules (proposal 7.2), rules 1-9, at the
-    declarations stage. `corpus` maps every scanned filename (Doc.name, a
-    bare basename — safe because fm-id-dup already requires unique numbers
-    repository-wide) to its Doc. 0005 adds "final" (word_count, the
-    Complexity box, rule 10, and running this at the "final" stage inside
-    `terrastep check`)."""
-    assert stage == "declarations", "0005 adds the 'final' stage"
+    """The brain budget layer's own rules (proposal 7.2), rules 1-10.
+    `corpus` maps every scanned filename (Doc.name, a bare basename — safe
+    because fm-id-dup already requires unique numbers repository-wide) to
+    its Doc. `stage` is "declarations" (0004: terrastep design precheck) or
+    "final" (0005: terrastep check) — both run rules 1-9 identically; "final"
+    also computes word_count and runs rule 10 (the Complexity box)."""
+    assert stage in ("declarations", "final")
     failures: list[core.Finding] = []
     warnings: list[str] = []
     elements = core.decision_items(doc)
@@ -571,16 +645,35 @@ def check_layer(doc: core.Doc, corpus: dict[str, core.Doc], cfg: Config, stage: 
         "evaluative_count": len(elements),
         "dependency_edge_count": None,
         "largest_coupled_cluster_size": None,
-        "word_count": None,  # 0005
+        "word_count": word_count(doc) if stage == "final" else None,
     }
     cluster_members: list[str] = []
+    limits = dataclasses.asdict(cfg.brain_budget.limits)
+
+    def finish(schema_valid: bool) -> LayerResult:
+        # Rule 10 (final only, and only with a valid ledger shape — the box
+        # cannot be honestly compared without real edge/prereq measures).
+        if stage == "final" and schema_valid:
+            in_budget_now = all(measures[m] is not None and measures[m] <= limits[m]
+                                for m in _ALL_MEASURES)
+            box = complexity_box(measures, limits, cluster_members, in_budget_now)
+            box_finding = _check_complexity_box(doc, box)
+            if box_finding:
+                failures.append(box_finding)
+        known = {m: v for m, v in measures.items() if v is not None}
+        in_budget = all(known[m] <= limits[m] for m in known) if len(known) == len(_ALL_MEASURES) \
+            else None
+        for m in _ALL_MEASURES:
+            if measures[m] is not None and measures[m] > limits[m]:
+                warnings.append(_over_budget_warning(m, measures[m], limits[m], cluster_members))
+        return LayerResult(failures, warnings, measures, cluster_members, in_budget)
 
     # Rule 1: ledger present.
     raw = (doc.meta or {}).get("brain_budget")
     if not isinstance(raw, dict):
         failures.append(core.Finding("brain-budget-ledger-missing",
                                      "brain_budget is missing or is not a mapping"))
-        return LayerResult(failures, warnings, measures, cluster_members)
+        return finish(schema_valid=False)
 
     # Rule 2: strict YAML. Stop on failure.
     loaded = load_ledger(doc)
@@ -588,7 +681,7 @@ def check_layer(doc: core.Doc, corpus: dict[str, core.Doc], cfg: Config, stage: 
         failures.append(core.Finding(
             "brain-budget-yaml-strict",
             "brain_budget has " + "; ".join(loaded.strict_errors)))
-        return LayerResult(failures, warnings, measures, cluster_members)
+        return finish(schema_valid=False)
     ledger = loaded.ledger
 
     # Rule 3: format identity. Stop on failure.
@@ -600,7 +693,7 @@ def check_layer(doc: core.Doc, corpus: dict[str, core.Doc], cfg: Config, stage: 
             f"{current_schema_version!r}; run `terrastep design render`",
             path="brain_budget.schema_version", expected=current_schema_version,
             actual=ledger.get("schema_version")))
-        return LayerResult(failures, warnings, measures, cluster_members)
+        return finish(schema_valid=False)
 
     # Rule 4: schema.
     schema_errors = validate(ledger, working_schema())
@@ -622,7 +715,7 @@ def check_layer(doc: core.Doc, corpus: dict[str, core.Doc], cfg: Config, stage: 
     if schema_errors:
         # The ledger's shape cannot be trusted for edges, cycles, prereqs, or
         # the two ledger-dependent measures.
-        return LayerResult(failures, warnings, measures, cluster_members)
+        return finish(schema_valid=False)
 
     edges = ledger.get("edges", [])
     depends_on = ledger.get("depends_on", [])
@@ -647,16 +740,21 @@ def check_layer(doc: core.Doc, corpus: dict[str, core.Doc], cfg: Config, stage: 
     if prereq_cycle:
         failures.append(prereq_cycle)
 
-    # Rule 9 (declarations scope): the ledger, Blockers, and Questions.
+    # Rule 9: draft markers. "final" scans the whole file; "declarations"
+    # scans only the ledger, Blockers, and Questions.
     marker = FORMAT_DEFINITION["draft_marker"]
-    in_body = any(marker in "\n".join(sec.lines) for sec in doc.sections if sec.kind in ("B", "Q"))
-    if _contains_draft_marker(ledger) or in_body:
+    if stage == "final":
+        marker_present = marker in doc.body or _contains_draft_marker(ledger)
+    else:
+        in_body = any(marker in "\n".join(sec.lines) for sec in doc.sections if sec.kind in ("B", "Q"))
+        marker_present = _contains_draft_marker(ledger) or in_body
+    if marker_present:
+        scope = "the file" if stage == "final" else "the ledger, Blockers, or Questions"
         failures.append(core.Finding(
-            "brain-budget-draft-marker",
-            f"a scaffold draft marker ({marker}) is still present in the ledger, Blockers, "
-            "or Questions"))
+            "brain-budget-draft-marker", f"a scaffold draft marker ({marker}) is still present in "
+                                        f"{scope}"))
 
-    return LayerResult(failures, warnings, measures, cluster_members)
+    return finish(schema_valid=True)
 
 
 # --------------------------------------------------------------- the precheck report
@@ -719,4 +817,273 @@ def precheck_report(doc: core.Doc, corpus: dict[str, core.Doc], cfg: Config,
         "failures": [_finding_dict(f) for f in failures],
         "warnings": [_over_budget_warning(e["measure"], e["actual"], e["limit"], layer.cluster_members)
                     for e in over_budget],
+    }
+
+
+# --------------------------------------------------------------------- render
+
+class RenderRefused(Exception):
+    """`terrastep design render` writes nothing; `reasons` names why."""
+    def __init__(self, reasons: list[str]):
+        self.reasons = reasons
+        super().__init__("; ".join(reasons))
+
+
+def _render_check_schema() -> dict:
+    """working_schema(), except schema_version only needs the identity SHAPE,
+    not today's exact hash — render's whole job is to fix a stale one (9.5,
+    "stamp values are ignored for this test")."""
+    schema = json.loads(json.dumps(BASE_SCHEMA))
+    schema["properties"] = {**schema["properties"], "schema_version": {"$ref": "#/$defs/identity"}}
+    return schema
+
+
+def _has_unterminated_fence(body: str) -> bool:
+    in_fence = False
+    for ln in body.splitlines():
+        if core.FENCE_RE.match(ln):
+            in_fence = not in_fence
+    return in_fence
+
+
+def _rewrite_stamps_in_place(text: str, fm_text: str, fm_offset: int,
+                              new_schema_version: str, new_policy_id: str) -> str:
+    """Replace schema_version's and policy_id's values at the exact character
+    spans yaml.compose() marks on the parsed nodes, translated into the whole
+    file's coordinates via fm_offset. Every other byte — sibling keys,
+    comments, quoting — is untouched (9.5, point 2)."""
+    root = yaml.compose(fm_text)
+    bb_node = next(v for k, v in root.value if isinstance(k, yaml.ScalarNode)
+                  and k.value == "brain_budget")
+    replacements: list[tuple[int, int, str]] = []
+    for key_node, value_node in bb_node.value:
+        if key_node.value == "schema_version":
+            replacements.append((value_node.start_mark.index, value_node.end_mark.index,
+                                 new_schema_version))
+        elif key_node.value == "policy_id":
+            replacements.append((value_node.start_mark.index, value_node.end_mark.index,
+                                 new_policy_id))
+    result = text
+    for start, end, new_value in sorted(replacements, key=lambda r: r[0], reverse=True):
+        abs_start, abs_end = fm_offset + start, fm_offset + end
+        result = result[:abs_start] + new_value + result[abs_end:]
+    return result
+
+
+def _append_ledger(text: str, fm_end_offset: int, new_schema_version: str,
+                    new_policy_id: str) -> str:
+    """Add brain_budget as the frontmatter's last key, right before the
+    closing '---' — the safe way to add a new top-level YAML key without
+    re-serializing (and so disturbing) any existing one (9.5, point 3)."""
+    ledger_yaml = (f"brain_budget:\n  schema_version: {new_schema_version}\n"
+                  f"  policy_id: {new_policy_id}\n  depends_on: []\n  edges: []\n")
+    prefix = text[:fm_end_offset]
+    if not prefix.endswith("\n"):
+        prefix += "\n"
+    return prefix + ledger_yaml + text[fm_end_offset:]
+
+
+def _upsert_complexity_box(body: str, box: str, aliases: dict) -> str:
+    """Replace an existing Complexity section's lines with `box`, or insert
+    `box` just before ## Blockers if there is none yet (9.5, point 4)."""
+    role_patterns = core.build_role_patterns(aliases)
+    lines = body.split("\n")
+    in_fence = False
+    heading_at: list[tuple[int, str, str | None]] = []  # (line, kind, role)
+    for i, ln in enumerate(lines):
+        if core.FENCE_RE.match(ln):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        m = core.HEADING2_RE.match(ln)
+        if m:
+            kind, role = core.classify(m.group(1), role_patterns)
+            heading_at.append((i, kind, role))
+
+    blockers_at = next((i for i, kind, _ in heading_at if kind == "B"), len(lines))
+    complexity_idx = next((n for n, (i, kind, role) in enumerate(heading_at)
+                          if kind == "F" and role == "complexity"), None)
+    box_lines = box.rstrip("\n").split("\n")
+
+    if complexity_idx is not None:
+        start = heading_at[complexity_idx][0]
+        end = (heading_at[complexity_idx + 1][0] if complexity_idx + 1 < len(heading_at)
+              else blockers_at)
+        new_lines = lines[:start] + box_lines + [""] + lines[end:]
+    else:
+        new_lines = lines[:blockers_at] + box_lines + [""] + lines[blockers_at:]
+    return "\n".join(new_lines)
+
+
+def render(text: str, cfg: Config) -> str:
+    """`budget.render(text, cfg) -> new text`, or raises RenderRefused
+    (proposal 9.5). Idempotent: a second call on its own output returns
+    the same text unchanged."""
+    if not cfg.brain_budget.enabled:
+        raise RenderRefused(["brain budget is not enabled"])
+    meta, body, yaml_error, fm_text, fm_offset = core.split_frontmatter(text)
+    if meta is None:
+        raise RenderRefused(["no frontmatter block"])
+    if yaml_error:
+        raise RenderRefused([f"frontmatter does not parse: {yaml_error}"])
+    if _has_unterminated_fence(body):
+        raise RenderRefused(["a code fence is left open"])
+    role_patterns = core.build_role_patterns(cfg.aliases)
+    sections = core.parse_sections(body, role_patterns)
+    if not any(s.kind == "B" for s in sections):
+        raise RenderRefused(["## Blockers is missing"])
+
+    raw_ledger = meta.get("brain_budget")
+    ledger_present = isinstance(raw_ledger, dict)
+    if ledger_present:
+        probe = core.Doc(path=Path("<render>"), rel="<render>", meta=meta, yaml_error=None,
+                         body=body, sections=sections, fm_text=fm_text, fm_offset=fm_offset)
+        strict = load_ledger(probe)
+        if strict.strict_errors:
+            raise RenderRefused(["brain_budget has " + "; ".join(strict.strict_errors)])
+        schema_errors = validate(raw_ledger, _render_check_schema())
+        if schema_errors:
+            raise RenderRefused([f"{e.path}: expected {e.expected}, got {e.actual!r}"
+                                for e in schema_errors])
+
+    new_sv, new_pid = schema_version(), policy_id(cfg.brain_budget.limits)
+    if ledger_present:
+        new_text = _rewrite_stamps_in_place(text, fm_text, fm_offset, new_sv, new_pid)
+    else:
+        new_text = _append_ledger(text, fm_offset + len(fm_text), new_sv, new_pid)
+
+    # Recompute against the new text, so the box reflects the stamps just
+    # written (not the ones that may have just been replaced/added).
+    new_meta, new_body, _, new_fm_text, new_fm_offset = core.split_frontmatter(new_text)
+    new_sections = core.parse_sections(new_body, role_patterns)
+    new_doc = core.Doc(path=Path("<render>"), rel="<render>", meta=new_meta, yaml_error=None,
+                      body=new_body, sections=new_sections, fm_text=new_fm_text,
+                      fm_offset=new_fm_offset)
+    layer = check_layer(new_doc, {new_doc.name: new_doc}, cfg, stage="final")
+    limits = dataclasses.asdict(cfg.brain_budget.limits)
+    box = complexity_box(layer.measures, limits, layer.cluster_members, bool(layer.in_budget))
+    frontmatter_prefix = new_text[:len(new_text) - len(new_body)]
+    return frontmatter_prefix + _upsert_complexity_box(new_body, box, cfg.aliases)
+
+
+# ------------------------------------------------------------------- scaffold
+
+def scaffold_text(title: str, depends_on: list[str], cfg: Config, today: str) -> str:
+    """The new file's content for `terrastep design scaffold` (proposal 5.7,
+    9.3). `today` is status_changed's value (an ISO date string), passed in
+    rather than read from the clock here, so a test can pin it. With brain
+    budget off: a plain skeleton, no ledger, no Complexity section (9.3,
+    point 6) — useful to every terrastep repository, not just budgeted ones."""
+    meta: dict = {
+        "status": "planning",
+        "status_changed": today,
+        "type": "design",
+        "next": "Owner reviews.",
+    }
+    if cfg.brain_budget.enabled:
+        marker = FORMAT_DEFINITION["draft_marker"]
+        meta["brain_budget"] = {
+            "schema_version": schema_version(),
+            "policy_id": policy_id(cfg.brain_budget.limits),
+            "depends_on": [{"file": f, "contract": marker} for f in depends_on],
+            "edges": [],
+        }
+    frontmatter = yaml.dump(meta, sort_keys=False, default_flow_style=False)
+
+    marker = FORMAT_DEFINITION["draft_marker"]
+    body = [f"# {title}", "", "## Summary", marker, "", "## Scope", marker, "",
+            "## The design", marker, "", "## Verification", marker, ""]
+    if cfg.brain_budget.enabled:
+        body += ["## Complexity", ""]
+    body += ["## Blockers", marker, "", "## Questions", marker, "",
+            "## Recommendations", marker, "", "## Sequencing", marker, ""]
+    return f"---\n{frontmatter}---\n" + "\n".join(body)
+
+
+def default_slug(title: str) -> str:
+    """lower case, with other characters turned into `_` (9.3, point 2)."""
+    slug = re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_")
+    return slug or "design"
+
+
+def in_budget_value(doc: core.Doc, corpus: dict[str, core.Doc], cfg: Config) -> str:
+    """"yes", "no", or "NA" for the STATUS.md index column (5.9). Computed
+    from freshly recomputed measures, not from the box last rendered."""
+    if (not cfg.brain_budget.enabled or doc.type != "design"
+            or doc.status not in ("planning", "ready") or not (doc.meta and not doc.yaml_error)):
+        return "NA"
+    layer = check_layer(doc, corpus, cfg, stage="final")
+    if layer.in_budget is None:
+        return "NA"
+    return "yes" if layer.in_budget else "no"
+
+
+# ---------------------------------------------------------- the check report
+
+_DEPENDENCY_CODES = frozenset({"brain-budget-edge", "brain-budget-cycle", "brain-budget-prereq",
+                              "brain-budget-prereq-cycle"})
+
+
+def check_report(docs: list[core.Doc], cfg: Config, failures: dict[str, list[core.Finding]],
+                 warnings: dict[str, list[str]], only: set[str] | None, config_file: Path,
+                 terrastep_version: str) -> dict:
+    """`terrastep check --format json` (proposal 7.8). `failures`/`warnings`
+    are core.check_corpus(...)'s result — this only reshapes them and adds
+    each budgeted design's brain_budget block."""
+    corpus = {d.name: d for d in docs}
+    index_rel = cfg.index_rel_path
+    config_sha256 = (hashlib.sha256(config_file.read_bytes()).hexdigest()
+                     if config_file.exists() else None)
+
+    scanned = [d for d in docs if only is None or d.rel in only]
+    doc_reports = []
+    for d in scanned:
+        entry = {
+            "file": d.rel, "type": d.type, "status": d.status,
+            "failures": [_finding_dict(f) for f in failures.get(d.rel, [])],
+            "warnings": list(warnings.get(d.rel, [])),
+        }
+        if cfg.brain_budget.enabled and d.type == "design" and d.status in ("planning", "ready"):
+            layer = check_layer(d, corpus, cfg, stage="final")
+            limits = dataclasses.asdict(cfg.brain_budget.limits)
+            layer_codes = {f.code for f in layer.failures}
+            open_blockers = [i.ident for i in core.decision_items(d) if i.letter == "B"
+                            and "open" in core.TAG_RE.findall(i.first_line)]
+            over_budget = []
+            for m in _ALL_MEASURES:
+                if layer.measures[m] is not None and layer.measures[m] > limits[m]:
+                    e = {"measure": m, "actual": layer.measures[m], "limit": limits[m]}
+                    if m == "largest_coupled_cluster_size":
+                        e["members"] = layer.cluster_members
+                    over_budget.append(e)
+            entry["brain_budget"] = {
+                "stage": "final",
+                "format_valid": not bool(layer_codes),
+                "in_budget": layer.in_budget,
+                "over_budget": over_budget,
+                "open_blockers": open_blockers,
+                "dependency_validation": "failed" if layer_codes & _DEPENDENCY_CODES else "passed",
+                "policy_id": policy_id(cfg.brain_budget.limits),
+                "schema_version": schema_version(),
+                "measures": layer.measures,
+                "limits": limits,
+                "file_sha256": (hashlib.sha256(d.path.read_bytes()).hexdigest()
+                               if d.path.exists() else None),
+            }
+        doc_reports.append(entry)
+
+    total_failures = sum(len(v) for v in failures.values())
+    total_warnings = sum(len(v) for v in warnings.values())
+    return {
+        "terrastep_version": terrastep_version,
+        "config_file": str(config_file),
+        "config_sha256": config_sha256,
+        "ok": total_failures == 0,
+        "summary": {"documents": len(scanned), "failures": total_failures, "warnings": total_warnings},
+        "documents": doc_reports,
+        "corpus": {
+            "failures": [_finding_dict(f) for f in failures.get(index_rel, [])],
+            "warnings": list(warnings.get("(all)", [])),
+        },
     }

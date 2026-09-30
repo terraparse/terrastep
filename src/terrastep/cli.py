@@ -61,6 +61,10 @@ def survey(docs: list[core.Doc], scope: str) -> None:
 def cmd_check(args: argparse.Namespace) -> int:
     root, cfg = _load(args)
     if args.if_changed and not hooks.has_uncommitted_changes(root, cfg):
+        if args.format == "json":
+            # A caller that parses stdout always gets a JSON document, even
+            # when nothing ran (0005, decided 2026-09-29).
+            print(json.dumps({"ok": True, "skipped": True}))
         return 0
     docs = core.scan_docs(root, cfg)
     only = None
@@ -80,14 +84,14 @@ def cmd_check(args: argparse.Namespace) -> int:
             print(f"terrastep check: not a document under {'/'.join(cfg.scan_dirs)}: "
                   f"{', '.join(unknown)}", file=sys.stderr)
             return 2
-    failures, warnings = core.check_docs(docs, cfg, only)
+    failures, warnings = core.check_corpus(root, docs, cfg, only)
 
-    if only is None:
-        index_path = root / cfg.index_rel_path
-        expected = core.render_status(docs, cfg)
-        if not index_path.exists() or index_path.read_text(encoding="utf-8") != expected:
-            failures.setdefault(cfg.index_rel_path, []).append(core.Finding(
-                "stale-index", "index file is missing or differs from the frontmatter; run `terrastep build`"))
+    if args.format == "json":
+        config_file = args.config.resolve() if args.config else root / config_mod.CONFIG_FILENAME
+        report = budget_mod.check_report(docs, cfg, failures, warnings, only, config_file, __version__)
+        report["skipped"] = False
+        print(json.dumps(report))
+        return 0 if report["ok"] else 1
 
     for rel, items in sorted(warnings.items()):
         for w in items:
@@ -255,6 +259,77 @@ def cmd_design_precheck(args: argparse.Namespace) -> int:
     return 0 if report["declarations_valid"] else 1
 
 
+def cmd_design_render(args: argparse.Namespace) -> int:
+    """Write the tool-owned stamps and Complexity box (proposal 9.5). Refuses
+    (exit 1, writes nothing) if brain budget is off or the file cannot be
+    rendered honestly; idempotent otherwise."""
+    _, cfg = _load(args)
+    path = args.file
+    if not path.exists():
+        print(f"terrastep design render: no such file: {path}", file=sys.stderr)
+        return 1
+    text = path.read_text(encoding="utf-8")
+    try:
+        new_text = budget_mod.render(text, cfg)
+    except budget_mod.RenderRefused as e:
+        print(f"terrastep design render: refused: {'; '.join(e.reasons)}", file=sys.stderr)
+        return 1
+    if new_text == text:
+        print(f"{path}: unchanged")
+        return 0
+    path.write_text(new_text, encoding="utf-8")
+    print(f"wrote {path}")
+    return 0
+
+
+def cmd_design_scaffold(args: argparse.Namespace) -> int:
+    """Create a new design skeleton with the next free number (proposal 9.3).
+    Never overwrites; gates each --depends-on on that document's own
+    per-document check (over budget is fine; a failure is not)."""
+    import datetime
+
+    root, cfg = _load(args)
+    docs = core.scan_docs(root, cfg)
+    corpus = {d.name: d for d in docs}
+    names = {d.name for d in docs}
+    id_counts = Counter(d.rfc_id for d in docs if d.rfc_id is not None)
+
+    dir_arg = args.dir if args.dir is not None else Path(cfg.scan_dirs[0])
+    dir_path = (dir_arg if dir_arg.is_absolute() else root / dir_arg).resolve()
+    scan_dir_paths = [(root / sd).resolve() for sd in cfg.scan_dirs]
+    if not any(dir_path == base or base in dir_path.parents for base in scan_dir_paths):
+        print(f"terrastep design scaffold: --dir {dir_arg} is not inside any scan_dirs entry "
+              f"({', '.join(cfg.scan_dirs)})", file=sys.stderr)
+        return 1
+
+    for target in (args.depends_on or []):
+        target_doc = corpus.get(target)
+        if target_doc is None or target_doc.type != "design":
+            print(f"terrastep design scaffold: --depends-on {target}: not a scanned design "
+                  "document", file=sys.stderr)
+            return 1
+        findings, _ = core.check_doc(target_doc, names, id_counts, cfg, corpus)
+        if findings:
+            codes = ", ".join(sorted({f.code for f in findings}))
+            print(f"terrastep design scaffold: --depends-on {target} fails `terrastep check` "
+                  f"({codes}); it must pass before a design can depend on it", file=sys.stderr)
+            return 1
+
+    number = core.next_id(docs, cfg)
+    slug = args.slug or budget_mod.default_slug(args.title)
+    target_path = dir_path / f"{number:04d}_{slug}.md"
+    if target_path.exists():
+        print(f"terrastep design scaffold: {target_path} already exists", file=sys.stderr)
+        return 1
+
+    text = budget_mod.scaffold_text(args.title, args.depends_on or [], cfg,
+                                    datetime.date.today().isoformat())
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text(text, encoding="utf-8")
+    print(f"wrote {target_path}")
+    return 0
+
+
 def cmd_hook(args: argparse.Namespace) -> int:
     root, cfg = _load(args)
     if args.hook_name != "pre-commit":
@@ -274,6 +349,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("files", nargs="*", help="report only these files (context still comes from all)")
     p.add_argument("--if-changed", action="store_true",
                     help="exit 0 with no output when scan_dirs has no uncommitted change")
+    p.add_argument("--format", choices=("text", "json"), default="text", help="output format")
     _add_common(p)
     p.set_defaults(func=cmd_check)
 
@@ -307,8 +383,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(p)
     p.set_defaults(func=cmd_skill)
 
-    p = sub.add_parser("design", help="brain budget: budget, precheck (see also: render, "
-                                       "scaffold, added by 0005)")
+    p = sub.add_parser("design", help="brain budget: budget, precheck, render, scaffold")
     design_sub = p.add_subparsers(dest="design_action", required=True)
     pd = design_sub.add_parser("budget", help="show whether brain budget is enabled and its "
                                               "effective limits")
@@ -322,6 +397,21 @@ def build_parser() -> argparse.ArgumentParser:
     pp.add_argument("--format", choices=("text", "json"), default="text", help="output format")
     _add_common(pp)
     pp.set_defaults(func=cmd_design_precheck)
+
+    pr = design_sub.add_parser("render", help="write the tool-owned stamps and Complexity box")
+    pr.add_argument("file", type=Path, help="the design document to render")
+    _add_common(pr)
+    pr.set_defaults(func=cmd_design_render)
+
+    psc = design_sub.add_parser("scaffold", help="create a new design skeleton with the next "
+                                                 "free number")
+    psc.add_argument("--title", required=True, help="the design's title (the H1)")
+    psc.add_argument("--slug", default=None, help="default: derived from --title")
+    psc.add_argument("--dir", type=Path, default=None, help="default: scan_dirs[0]")
+    psc.add_argument("--depends-on", action="append", default=None, metavar="FILE",
+                     help="a prerequisite design's filename; may repeat")
+    _add_common(psc)
+    psc.set_defaults(func=cmd_design_scaffold)
 
     p = sub.add_parser("hook", help="run an installed hook (called by the shim)")
     p.add_argument("hook_name", choices=("pre-commit",))

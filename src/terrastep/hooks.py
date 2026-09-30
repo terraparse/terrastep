@@ -29,12 +29,7 @@ def has_uncommitted_changes(root: Path, config: config_mod.Config) -> bool:
 def check_snapshot(root: Path, config: config_mod.Config) -> tuple[bool, str]:
     """Run the same check `terrastep check` runs, against `root`. Returns (ok, message)."""
     docs = core.scan_docs(root, config)
-    failures, warnings = core.check_docs(docs, config)
-    index_path = root / config.index_rel_path
-    expected = core.render_status(docs, config)
-    if not index_path.exists() or index_path.read_text(encoding="utf-8") != expected:
-        failures.setdefault(config.index_rel_path, []).append(core.Finding(
-            "stale-index", "index file is missing or differs from the frontmatter; run `terrastep build`"))
+    failures, warnings = core.check_corpus(root, docs, config)
 
     lines: list[str] = []
     for rel, items in sorted(warnings.items()):

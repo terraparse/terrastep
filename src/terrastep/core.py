@@ -74,6 +74,8 @@ FAILURE_CODES: dict[str, str] = {
                           "document, names this file, or repeats another entry.",
     "brain-budget-prereq-cycle": "Designs depend on each other in a cycle.",
     "brain-budget-draft-marker": "A scaffold draft marker is still present.",
+    "brain-budget-complexity": "The Complexity box is missing, not placed just before Blockers, "
+                              "or not what `terrastep design render` would write.",
 }
 
 # Front roles each plan type must have (see "The body" in the design note).
@@ -113,6 +115,8 @@ ROLE_ALIASES: dict[str, tuple[str, ...]] = {
         r"what was built", r"implementation (?:record|history)",
         r"execution note",
     ),
+    # Tool-owned (0005): only `terrastep design render` writes this section.
+    "complexity": (r"complexity",),
 }
 
 DECISION_RES = {
@@ -501,7 +505,8 @@ def check_body(doc: Doc, config: Config) -> tuple[list[Finding], list[str]]:
     return out, warns
 
 
-def check_doc(doc: Doc, names: set[str], id_counts: Counter, config: Config) -> tuple[list[Finding], list[str]]:
+def check_doc(doc: Doc, names: set[str], id_counts: Counter, config: Config,
+              corpus: dict[str, Doc] | None = None) -> tuple[list[Finding], list[str]]:
     findings = check_frontmatter(doc, names, config)
     warns: list[str] = []
     if doc.rfc_id is not None and id_counts[doc.rfc_id] > 1:
@@ -509,6 +514,20 @@ def check_doc(doc: Doc, names: set[str], id_counts: Counter, config: Config) -> 
     if doc.meta and not doc.yaml_error and doc.type in PLAN_TYPES:
         body_findings, warns = check_body(doc, config)
         findings.extend(body_findings)
+        # The brain budget layer, final stage (0005): only a planning/ready
+        # design, only when the repository opted in, and only when the
+        # caller supplied the whole corpus (the prerequisite-cycle rule
+        # needs every scanned design, not just this file).
+        if (config.brain_budget.enabled and doc.status in ("planning", "ready")
+                and corpus is not None):
+            from . import budget as budget_mod  # deferred: budget.py imports core
+            layer = budget_mod.check_layer(doc, corpus, config, stage="final")
+            findings.extend(layer.failures)
+            warns.extend(layer.warnings)
+    if (config.brain_budget.enabled and doc.meta and not doc.yaml_error
+            and doc.type in ("note", "legacy") and any(s.kind in ("B", "Q") for s in doc.sections)):
+        warns.append(f"a {doc.type} document has a Blockers or Questions section; brain budget "
+                     "does not measure it")
     return findings, warns
 
 
@@ -517,12 +536,13 @@ def check_docs(docs: list[Doc], config: Config,
     """Check every doc (context comes from all of them); report only `only` if given."""
     names = {d.name for d in docs}
     id_counts = Counter(d.rfc_id for d in docs if d.rfc_id is not None)
+    corpus = {d.name: d for d in docs}
     failures: dict[str, list[Finding]] = {}
     warnings: dict[str, list[str]] = {}
     for doc in docs:
         if only is not None and doc.rel not in only:
             continue
-        f, w = check_doc(doc, names, id_counts, config)
+        f, w = check_doc(doc, names, id_counts, config, corpus)
         if f:
             failures[doc.rel] = f
         if w:
@@ -530,6 +550,21 @@ def check_docs(docs: list[Doc], config: Config,
     in_progress = [d.rel for d in docs if d.status == "in-progress"]
     if len(in_progress) > config.in_progress_cap:
         warnings["(all)"] = [f"{len(in_progress)} documents are in-progress; the cap is {config.in_progress_cap}"]
+    return failures, warnings
+
+
+def check_corpus(root: Path, docs: list[Doc], config: Config,
+                  only: set[str] | None = None) -> tuple[dict[str, list[Finding]], dict[str, list[str]]]:
+    """check_docs(...) plus the stale-index check, in one place so
+    `cli.cmd_check` and `hooks.check_snapshot` can never give different
+    results (0005)."""
+    failures, warnings = check_docs(docs, config, only)
+    if only is None:
+        index_path = root / config.index_rel_path
+        expected = render_status(docs, config)
+        if not index_path.exists() or index_path.read_text(encoding="utf-8") != expected:
+            failures.setdefault(config.index_rel_path, []).append(Finding(
+                "stale-index", "index file is missing or differs from the frontmatter; run `terrastep build`"))
     return failures, warnings
 
 
@@ -554,8 +589,14 @@ def next_id(docs: list[Doc], config: Config) -> int:
 
 # ------------------------------------------------------------ the index file
 
-def render_status(docs: list[Doc], config: Config) -> str:
-    """The text of the index file. Deterministic: no timestamp."""
+def render_status(docs: list[Doc], config: Config, corpus: dict[str, Doc] | None = None) -> str:
+    """The text of the index file. Deterministic: no timestamp. `corpus`
+    (filename -> Doc) is what the "In budget" column (0005) measures each
+    design against; it defaults to one built from `docs` itself, so every
+    existing caller that passes only (docs, config) is unaffected."""
+    from . import budget as budget_mod  # deferred: budget.py imports core
+    if corpus is None:
+        corpus = {d.name: d for d in docs}
     with_meta = [d for d in docs if d.meta and not d.yaml_error]
     without = [d for d in docs if not (d.meta and not d.yaml_error)]
     index_dir = config.index_dir
@@ -571,12 +612,14 @@ def render_status(docs: list[Doc], config: Config) -> str:
     def row(d: Doc) -> str:
         ident = f"{d.rfc_id:04d}" if d.rfc_id is not None else ""
         nxt = str((d.meta or {}).get("next", "")).replace("|", "\\|").replace("\n", " ")
-        return f"| {d.changed} | {ident} | {link(d)} | {d.type} | {d.status} | {nxt} |"
+        in_budget = budget_mod.in_budget_value(d, corpus, config)
+        return f"| {d.changed} | {ident} | {link(d)} | {d.type} | {d.status} | {in_budget} | {nxt} |"
 
     def sort_key(d: Doc):
         return (d.changed, d.rfc_id or 0, d.rel)
 
-    header = "| Changed | No. | Doc | Type | Status | Next |\n|---|---|---|---|---|---|"
+    header = ("| Changed | No. | Doc | Type | Status | In budget | Next |\n"
+              "|---|---|---|---|---|---|---|")
     ordered = sorted(with_meta, key=sort_key, reverse=True)
     active = [d for d in ordered if d.status in ("ready", "in-progress")]
     planning = [d for d in ordered if d.status == "planning"]

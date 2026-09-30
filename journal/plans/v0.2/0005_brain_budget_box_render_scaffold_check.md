@@ -1,8 +1,8 @@
 ---
-status: planning
+status: implemented
 status_changed: 2026-09-29
 type: design
-next: Owner reviews Q1-Q12. Over the proposed evaluative limit (12 > 10); owner kept it as one design.
+next: None. Sequencing steps 1-8 are done (see "What was built" below). 0006 depends on this.
 ---
 
 # Brain budget C: Complexity box, render, scaffold and the final check
@@ -252,3 +252,67 @@ A failed draft still has format failures after its retries (OQ3).
 6. `terrastep design scaffold`, and nested actions in `skilldoc._verb_help`.
 7. The `In budget` column. Run `terrastep build` on this repository.
 8. Run `terrastep skill build`, the full suite and `terrastep check`. Commit.
+
+## What was built (2026-09-29)
+
+Steps 1-8 done, each as recommended, no scope changes.
+
+- **`core.py`**: the `complexity` role (found, by testing render end to end, that omitting it makes
+  render silently insert a *second* box next to the first, since nothing recognized the existing
+  one — this is exactly the "unclassified front section" case the design already names, so its
+  fix was already in scope, just easy to skip by accident). `check_doc` gained a `corpus`
+  parameter and now calls `budget.check_layer(doc, corpus, config, stage="final")` for a
+  `planning`/`ready` design when brain budget is enabled — a local import inside the function
+  (`from . import budget`), since `budget.py` already imports `core.py`; Python resolves the name
+  when the function runs, not when the module loads, so the cycle never actually executes.
+  `check_doc` also warns on a `note`/`legacy` document with a Blockers or Questions section, gated
+  on `enabled` so a repository that never turned brain budget on sees no new warning (matching the
+  proposal's own "the one visible change is the index column" claim). `check_corpus(root, docs,
+  config, only)` unifies `check_docs` plus the stale-index comparison; `cli.cmd_check` and
+  `hooks.check_snapshot` both call it now, so they cannot drift. `render_status` gained an
+  optional `corpus` argument and writes the permanent `In budget` column.
+- **`budget.py`**: `word_count` (reassembled from `doc.sections`, not re-parsed text, since a word
+  count doesn't need exact spacing); `complexity_box` (matches the proposal's literal text,
+  character for character, both within- and over-budget); `check_layer` extended to a `stage`
+  parameter of `"declarations"` or `"final"`, sharing rules 1-9 and adding rule 10 (the box) and
+  `word_count` only at `"final"`; `render` (the strict pre-check reuses 0004's schema validator
+  with `schema_version` relaxed to a shape check, since render's whole job is to fix a stale one);
+  `scaffold_text`/`default_slug`; `in_budget_value`; `check_report` (the full `--format json`
+  shape).
+- **`terrastep design render FILE`**: refuses and writes nothing on 7 distinct conditions (brain
+  budget off, no frontmatter, unparseable frontmatter, an open code fence, `## Blockers` missing,
+  a strict-YAML ledger problem, a schema problem); otherwise idempotent, confirmed on the
+  proposal's own worked example (already-correct input reproduced byte-for-byte) and on a design
+  scaffolded from nothing.
+- **`terrastep design scaffold`**: gates each `--depends-on` on that target's own per-document
+  check (an over-budget target passes; a failing one is refused by name and reason); `--dir` must
+  resolve inside a `scan_dirs` entry; never overwrites. With brain budget off, writes a plain
+  skeleton with no ledger and no Complexity section.
+- **`terrastep check --format json`**, and `--if-changed --format json` with no change now prints
+  exactly `{"ok": true, "skipped": true}` (text output is unchanged: silent, exit 0).
+- **A real bug found and fixed while testing render, not while writing it**: the first render of a
+  design that never had a `## Complexity` heading inserted the box with two trailing blank lines;
+  a second render (now finding the box and replacing it) used one. Rendering twice therefore
+  produced different bytes — caught by an idempotency test built specifically to model that exact
+  "adopt a pre-brain-budget design" case, not by reasoning about the code.
+- **Verified end to end in a scratch repository**, not only in `pytest`: scaffold a design, precheck
+  it while it still has draft markers (fails, as designed), fill it in, precheck (passes), render,
+  build, check (passes) — matching proposal 10.5's whole per-design loop by hand.
+- **Two decisions not spelled out in the design text**:
+  - `corpus` for `render`'s own internal measure computation is the single document being
+    rendered (`{doc.name: doc}`), not the whole repository — a lone `render` call cannot see other
+    documents' `depends_on` graphs, so a prerequisite-cycle involving other files is only ever
+    caught by `terrastep check` afterward, which does load the whole corpus.
+  - The note/legacy warning and the brain-budget layer's internal `warnings` field are both gated
+    on `[brain_budget] enabled`, inferred from the proposal's own claim that disabling brain budget
+    leaves every existing behavior unchanged except the index column.
+- **Tests**: `tests/test_budget.py` gained 22 (word count, the box's exact text, render's
+  idempotency/refusals/adoption/byte-preservation, scaffold_text, `in_budget_value`);
+  `tests/test_cli.py` gained 13 (render, scaffold's every refusal and success path, `check
+  --format json`, the `--if-changed` skip, the note warning, the `In budget` column, a
+  stale-index-on-limit-change round trip, `cmd_check`/`hooks.check_snapshot` agreement, and that
+  brain budget on never re-fails this repository's own already-shipped designs). Full suite: 217
+  passing (181 before this design).
+
+No divergence from the plan as written, beyond the two decisions above and the box-insertion bug
+fix. `enabled = false` is still this repository's setting; 0006 turns it on.

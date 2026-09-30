@@ -387,3 +387,306 @@ def test_precheck_report_on_the_worked_example_measures_3_2_1():
     assert report["measures"]["word_count"] is None
     assert report["declarations_valid"] is True
     assert report["failures"] == []
+
+
+# ---------------------------------------------------------------- 0005 tests
+#
+# The Complexity box, render, scaffold, and the final-stage layer.
+# journal/plans/v0.2/0005_brain_budget_box_render_scaffold_check.md,
+# Verification.
+
+WORKED_EXAMPLE_FULL = """---
+status: planning
+status_changed: 2026-09-29
+type: design
+next: Owner reviews.
+brain_budget:
+  schema_version: {sv}
+  policy_id: {pid}
+  depends_on:
+    - file: 0007_transaction_query_contract.md
+      contract: The query returns every authorized, filtered row in the requested sort order.
+  edges:
+    - from: Q1
+      to: Q2
+      type: sequencing
+      contract: Q2 orders the field set that Q1 selects. The order cannot change which fields Q1 selects.
+---
+# Add the CSV download
+
+## Summary
+
+Add a CSV download of the transaction view. Rows come from the query contract in 0007_transaction_query_contract.md: every authorized, filtered row, in the requested sort order.
+
+## Scope
+
+This design adds CSV only. It does not change the 0007 query or add other export formats.
+
+## The design
+
+- Read rows through the 0007 query. Do not add a second query path.
+- Serialize each row with CSV quoting and escaping, using the Q1 fields in Q2 order.
+- Return the result as a CSV attachment.
+
+## Verification
+
+- Compare the exported rows and their order with the same filtered query.
+- Cover empty results, quoting and escaping, and rows the caller is not allowed to see.
+
+## Complexity
+
+**Within budget: yes.**
+
+| Measure | Actual | Limit |
+| --- | ---: | ---: |
+| Evaluative count | 3 | 10 |
+| Dependency edge count | 2 | 11 |
+| Largest coupled cluster size | 1 | 3 |
+| Word count | 245 | 2000 |
+
+## Blockers
+
+### B1 — The response helpers may not stream an attachment [open]
+
+The design assumes that the response helpers can stream a CSV attachment. Nobody has checked this yet.
+
+**Recommendation:** inspect the response helpers before coding. If they cannot stream, add that capability in a separate design first.
+
+## Questions
+
+### Q1 — Which fields does the CSV include?
+
+**Recommendation:** the fields that the transaction view displays.
+
+### Q2 — In what order are the columns written?
+
+**Recommendation:** the on-screen column order when the export starts.
+
+## Recommendations
+
+1. Confirm streaming support before coding (B1).
+2. Export the displayed fields (Q1) in their on-screen order (Q2).
+
+## Sequencing
+
+Resolve B1. Then build the serializer and the download in one change.
+""".format(sv=budget.schema_version(), pid=budget.policy_id(BudgetLimits()))
+
+
+def _load_as_doc(text: str, name: str = "0008_csv_download.md") -> core.Doc:
+    meta, body_text, yaml_error, fm_text, fm_offset = core.split_frontmatter(text)
+    role_patterns = core.build_role_patterns({})
+    return core.Doc(path=Path(name), rel=name, meta=meta, yaml_error=yaml_error, body=body_text,
+                    sections=core.parse_sections(body_text, role_patterns),
+                    fm_text=fm_text, fm_offset=fm_offset)
+
+
+def test_word_count_on_the_worked_example_is_245():
+    doc = _load_as_doc(WORKED_EXAMPLE_FULL)
+    assert budget.word_count(doc) == 245
+
+
+def test_word_count_changes_when_the_prose_changes():
+    duplicated = WORKED_EXAMPLE_FULL.replace(
+        "The design assumes that the response helpers",
+        "The design assumes that the design assumes that the response helpers")
+    doc = _load_as_doc(duplicated)
+    assert budget.word_count(doc) == 249
+
+
+def test_word_count_excludes_the_complexity_section():
+    doc = _load_as_doc(WORKED_EXAMPLE_FULL)
+    body_without_box = WORKED_EXAMPLE_FULL.split("## Complexity")[0]
+    assert "Within budget" not in body_without_box  # sanity: box really removed
+    # word_count on the SAME doc (box included in the parsed sections) must
+    # equal word_count computed with the box already stripped out entirely.
+    stripped = WORKED_EXAMPLE_FULL.split("## Complexity")[0] + "## Blockers" + \
+        WORKED_EXAMPLE_FULL.split("## Blockers", 1)[1]
+    doc_stripped = _load_as_doc(stripped)
+    assert budget.word_count(doc) == budget.word_count(doc_stripped)
+
+
+def test_complexity_box_within_budget_matches_the_proposals_exact_text():
+    measures = {"evaluative_count": 3, "dependency_edge_count": 2,
+                "largest_coupled_cluster_size": 1, "word_count": 245}
+    limits = {"evaluative_count": 10, "dependency_edge_count": 11,
+              "largest_coupled_cluster_size": 3, "word_count": 2000}
+    box = budget.complexity_box(measures, limits, [], True)
+    assert box == (
+        "## Complexity\n\n**Within budget: yes.**\n\n"
+        "| Measure | Actual | Limit |\n| --- | ---: | ---: |\n"
+        "| Evaluative count | 3 | 10 |\n| Dependency edge count | 2 | 11 |\n"
+        "| Largest coupled cluster size | 1 | 3 |\n| Word count | 245 | 2000 |\n")
+
+
+def test_complexity_box_over_budget_matches_the_proposals_exact_text():
+    measures = {"evaluative_count": 4, "dependency_edge_count": 5,
+                "largest_coupled_cluster_size": 4, "word_count": 100}
+    limits = {"evaluative_count": 10, "dependency_edge_count": 11,
+              "largest_coupled_cluster_size": 3, "word_count": 2000}
+    box = budget.complexity_box(measures, limits, ["B1", "Q1", "Q2", "Q3"], False)
+    assert box.startswith(
+        "## Complexity\n\n**Within budget: no.** Over: largest coupled cluster size 4 > 3 "
+        "(B1, Q1, Q2, Q3).\n\n")
+
+
+def test_render_is_idempotent_on_an_already_correct_file():
+    cfg = Config(brain_budget=BrainBudgetConfig(enabled=True))
+    out = budget.render(WORKED_EXAMPLE_FULL, cfg)
+    assert out == WORKED_EXAMPLE_FULL  # already correct: no change at all
+    out2 = budget.render(out, cfg)
+    assert out2 == out
+
+
+def test_render_replaces_stamps_in_place_and_keeps_sibling_bytes():
+    stale = WORKED_EXAMPLE_FULL.replace(budget.schema_version(), "sha256:000000000000")
+    cfg = Config(brain_budget=BrainBudgetConfig(enabled=True))
+    out = budget.render(stale, cfg)
+    assert budget.schema_version() in out
+    assert "sha256:000000000000" not in out
+    # Every sibling key/comment/line outside the two stamp values and the box
+    # is untouched: the ledger's depends_on/edges block is byte-identical.
+    assert ("depends_on:\n    - file: 0007_transaction_query_contract.md\n"
+           "      contract: The query returns every authorized, filtered row "
+           "in the requested sort order.\n  edges:\n    - from: Q1\n") in out
+
+
+def test_render_adopts_a_planning_design_with_no_ledger():
+    text = """---
+status: planning
+status_changed: 2026-09-29
+type: design
+next: x
+---
+# T
+
+## Summary
+s
+
+## Blockers
+None: none needed here at all.
+
+## Questions
+None: none needed here at all.
+
+## Recommendations
+n/a
+
+## Sequencing
+n/a
+"""
+    cfg = Config(brain_budget=BrainBudgetConfig(enabled=True))
+    out = budget.render(text, cfg)
+    assert budget.schema_version() in out and budget.policy_id(BudgetLimits()) in out
+    assert "## Complexity" in out
+    doc = _load_as_doc(out, "t.md")
+    assert doc.meta["brain_budget"]["depends_on"] == []
+    assert doc.meta["brain_budget"]["edges"] == []
+
+
+@pytest.mark.parametrize("mutate,reason_substr", [
+    (lambda t: t, None),  # control: unmutated, must succeed
+])
+def test_render_succeeds_as_a_control(mutate, reason_substr):
+    cfg = Config(brain_budget=BrainBudgetConfig(enabled=True))
+    budget.render(mutate(WORKED_EXAMPLE_FULL), cfg)  # must not raise
+
+
+def test_render_refuses_when_brain_budget_is_off():
+    cfg = Config(brain_budget=BrainBudgetConfig(enabled=False))
+    with pytest.raises(budget.RenderRefused):
+        budget.render(WORKED_EXAMPLE_FULL, cfg)
+
+
+def test_render_refuses_with_no_frontmatter():
+    cfg = Config(brain_budget=BrainBudgetConfig(enabled=True))
+    with pytest.raises(budget.RenderRefused):
+        budget.render("# just a heading\n", cfg)
+
+
+def test_render_refuses_with_blockers_missing():
+    text = WORKED_EXAMPLE_FULL.replace("## Blockers\n\n### B1", "## NotBlockers\n\n### B1")
+    cfg = Config(brain_budget=BrainBudgetConfig(enabled=True))
+    with pytest.raises(budget.RenderRefused):
+        budget.render(text, cfg)
+
+
+def test_render_refuses_with_an_open_code_fence():
+    text = WORKED_EXAMPLE_FULL.replace("## Summary\n\n", "## Summary\n\n```\n")
+    cfg = Config(brain_budget=BrainBudgetConfig(enabled=True))
+    with pytest.raises(budget.RenderRefused):
+        budget.render(text, cfg)
+
+
+def test_render_refuses_with_an_invalid_ledger_schema():
+    text = WORKED_EXAMPLE_FULL.replace("type: sequencing", "kind: sequencing")
+    cfg = Config(brain_budget=BrainBudgetConfig(enabled=True))
+    with pytest.raises(budget.RenderRefused):
+        budget.render(text, cfg)
+
+
+def test_render_refuses_and_writes_nothing_reported_by_the_caller():
+    # render() itself never writes; this documents that contract directly.
+    cfg = Config(brain_budget=BrainBudgetConfig(enabled=False))
+    try:
+        budget.render(WORKED_EXAMPLE_FULL, cfg)
+        assert False, "should have refused"
+    except budget.RenderRefused as e:
+        assert e.reasons
+
+
+def test_default_slug_lowercases_and_underscores():
+    assert budget.default_slug("Add the CSV download!") == "add_the_csv_download"
+    assert budget.default_slug("   ") == "design"
+
+
+def test_scaffold_text_off_has_no_ledger_or_complexity_section():
+    cfg = Config()
+    text = budget.scaffold_text("A title", [], cfg, "2026-09-29")
+    assert "brain_budget" not in text
+    assert "## Complexity" not in text
+    meta, _, err, _, _ = core.split_frontmatter(text)
+    assert err is None and meta["type"] == "design"
+
+
+def test_scaffold_text_on_has_ledger_and_empty_complexity_section():
+    cfg = Config(brain_budget=BrainBudgetConfig(enabled=True))
+    text = budget.scaffold_text("A title", ["0007_x.md"], cfg, "2026-09-29")
+    meta, _, err, _, _ = core.split_frontmatter(text)
+    assert err is None
+    assert meta["brain_budget"]["schema_version"] == budget.schema_version()
+    assert meta["brain_budget"]["depends_on"] == [
+        {"file": "0007_x.md", "contract": FORMAT_DEFINITION_MARKER}]
+    assert "## Complexity\n\n## Blockers" in text
+
+
+FORMAT_DEFINITION_MARKER = budget.FORMAT_DEFINITION["draft_marker"]
+
+
+def test_in_budget_value_yes_no_and_na():
+    cfg = Config(brain_budget=BrainBudgetConfig(enabled=True))
+    doc = _load_as_doc(WORKED_EXAMPLE_FULL)
+    assert budget.in_budget_value(doc, {doc.name: doc}, cfg) == "yes"
+
+    over = _load_as_doc(WORKED_EXAMPLE_FULL.replace(
+        "edges:\n    - from: Q1\n      to: Q2\n      type: sequencing",
+        "edges:\n    - from: B1\n      to: Q1\n      type: coupled\n      contract: c\n"
+        "    - from: Q1\n      to: Q2\n      type: coupled"))
+    cfg_tight = Config(brain_budget=BrainBudgetConfig(
+        enabled=True, limits=BudgetLimits(largest_coupled_cluster_size=2)))
+    over2 = _load_as_doc(WORKED_EXAMPLE_FULL.replace(
+        budget.policy_id(BudgetLimits()), budget.policy_id(BudgetLimits(largest_coupled_cluster_size=2))
+    ).replace(
+        "edges:\n    - from: Q1\n      to: Q2\n      type: sequencing\n      contract: Q2 orders "
+        "the field set that Q1 selects. The order cannot change which fields Q1 selects.",
+        "edges:\n    - from: B1\n      to: Q1\n      type: coupled\n      contract: c\n"
+        "    - from: Q1\n      to: Q2\n      type: coupled\n      contract: c"))
+    assert budget.in_budget_value(over2, {over2.name: over2}, cfg_tight) == "no"
+
+    cfg_off = Config()
+    assert budget.in_budget_value(doc, {doc.name: doc}, cfg_off) == "NA"
+
+    note_text = WORKED_EXAMPLE_FULL.replace("type: design", "type: note").replace(
+        "status: planning", "status: in-progress")
+    note_doc = _load_as_doc(note_text)
+    assert budget.in_budget_value(note_doc, {note_doc.name: note_doc}, cfg) == "NA"

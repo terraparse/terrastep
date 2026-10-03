@@ -13,6 +13,11 @@ involved. Verified today: both a regular and an editable local install expose th
 command and correctly locate the bundled skill (`terrastep skill install` copies it out), with
 `git remote -v` still empty.
 
+**Update 2026-10-01**: method B is also done now. `origin` is
+`https://github.com/terraparse/terrastep.git` (public), with `main`, `dev`, and the `v0.2.0`
+annotated tag all pushed. The checklist in method B below is updated to say so; the mechanics stay
+useful for the next new branch or tag.
+
 ## The three ways to share it, and which to use
 
 | Method | Needs | Best for |
@@ -70,11 +75,16 @@ Checklist, done once:
 1. **License file and metadata. Done (2026-09-28).** MIT, `LICENSE`, and `pyproject.toml`'s
    `license`/`authors`/classifier. Needed regardless of public or private — without it, the terms
    anyone installing terrastep operates under are undefined.
-2. **Push to a GitHub remote.** `git remote -v` is empty today. Nothing else here works until a
-   remote exists. A private repository is a completely adequate choice for "share with my other
-   repos, or a collaborator" — it costs only that the puller needs read access (an SSH key
-   registered with GitHub, or a personal access token). Going public is a separate, later decision
-   (see C); nothing here requires it.
+2. **Push to a GitHub remote. Done (2026-10-01).** `origin` is
+   `https://github.com/terraparse/terrastep.git`, public. `main` and `dev` are both pushed and
+   tracking (`git branch -vv` shows `[origin/<branch>]`). A private repository would have been an
+   equally adequate choice for "share with my other repos, or a collaborator" — it only costs the
+   puller needing read access (an SSH key registered with GitHub, or a personal access token); going
+   public was a separate decision, made here, not a requirement of method B itself.
+
+   A new local branch still needs one `git push -u origin <branch>` to start tracking (plain
+   `git push` fails for a branch the remote has never seen); after that first push, plain `git push`
+   / `git pull` work on it with no flags.
 3. **Decide the version-tag convention** before the first tag, not after. Recommended, absent a
    stronger reason: [SemVer](https://semver.org/) — MAJOR for a change that could make an
    already-passing document start failing `terrastep check`, MINOR for a new verb or config key
@@ -82,7 +92,12 @@ Checklist, done once:
    between versions yet (0001, "What this does not do") — a MAJOR bump needs a hand-written
    migration note per consumer (the shape of `journal/origin/handoff.md`) until that tooling
    exists.
-4. **Tag releases**: `git tag vX.Y.Z && git push --tags`. Lets a consumer pin
+4. **Tag releases**: `git tag -a vX.Y.Z -m '<message>'` (an *annotated* tag — plain `git tag
+   vX.Y.Z` makes a lightweight tag with no message and no date, worth avoiding for a release marker),
+   then push the branch and the tag together with `git push --follow-tags`. `--follow-tags` pushes
+   only annotated tags reachable from what you're pushing, so it's safe to run routinely without
+   risk of pushing some unrelated stray tag — unlike `git push --tags`, which pushes every tag in the
+   repo regardless of reachability or annotation. Lets a consumer pin
    `pip install git+https://github.com/<you>/terrastep.git@v0.1.0` instead of floating on `main`.
 
 A public push, and a pushed tag, are visible to whoever can already see the repository once done
@@ -142,7 +157,9 @@ A release is not just "bump the version number." In order:
    terrastep's own journal failing its own check.
 7. **Commit the version bump and the regenerated files together**, one commit — they're one
    logical change, not two.
-8. **Tag and push** (`git tag vX.Y.Z && git push --tags`), once method B is set up and you want one.
+8. **Tag and push**: `git tag -a vX.Y.Z -m '<message>' && git push --follow-tags` (see method B's
+   tagging note above for why `-a` and `--follow-tags` specifically), once method B is set up and
+   you want one.
 9. **If published to PyPI**: `python -m build`, `twine upload dist/*`.
 
 ### What a consumer does after a new version ships
